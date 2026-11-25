@@ -2,8 +2,8 @@
 // As regras e colisões continuam 2D; aqui só se traduz posição (x, y) -> (x, y, z).
 import {
   THREE, U, mat, box, sphere, cyl,
-  makePlayer, makeSeed, makeTrash, makeSmog, makeBin, makeVent, updateVent,
-  makeDeadTree, makeGreenTree, makeLamp, makeChimney, makeFlag,
+  makePlayer, makeResident, animatePerson, makeSeed, makeTrash, makeDebris, makeDrain, makeSmog, makeBin, makeVent, updateVent,
+  makeDeadTree, makeGreenTree, makeLamp, makeChimney, makeFlag, bannerSprite,
 } from "./models.js";
 import { ventState } from "../entities/hazard.js";
 import { lerpHex, clamp } from "../engine/math.js";
@@ -52,7 +52,8 @@ export function createScene3D(canvas, wrap, g) {
   let root = null;
   let cache = {};
   let dyn = {};
-  let skyProgress = -1;
+  let skyProgress = "";
+  let lastNow = 0;
   let aspect = 1.7;
   let camDist = 24;
   let camX = 0;
@@ -75,23 +76,27 @@ export function createScene3D(canvas, wrap, g) {
   const Y = (py) => (g.level.ground - py) / U;
 
   // ------------------------------------------------------------ construção
-  function setSky(progress) {
-    if (progress === skyProgress) return;
-    skyProgress = progress;
+  const STORM_SKY = ["#5f7384", "#8d9ca6", "#7d8a8f"];
+  function setSky(progress, storm = 0) {
+    const key = `${progress}|${storm}`;
+    if (key === skyProgress) return;
+    skyProgress = key;
+    // Mistura com o tom de tempestade (storm 0..1).
+    const mix = (a, b, i) => new THREE.Color(lerpHex(a, b, progress)).lerp(new THREE.Color(STORM_SKY[i]), storm * 0.85).getStyle();
     const c = document.createElement("canvas");
     c.width = 4;
     c.height = 256;
     const x = c.getContext("2d");
     const grad = x.createLinearGradient(0, 0, 0, 256);
-    grad.addColorStop(0, lerpHex("#b8d9d0", "#7ec8e3", progress));
-    grad.addColorStop(0.72, lerpHex("#e8e5c9", "#d6f3e4", progress));
-    grad.addColorStop(1, lerpHex("#d3cda9", "#bce3c5", progress));
+    grad.addColorStop(0, mix("#b8d9d0", "#7ec8e3", 0));
+    grad.addColorStop(0.72, mix("#e8e5c9", "#d6f3e4", 1));
+    grad.addColorStop(1, mix("#d3cda9", "#bce3c5", 2));
     x.fillStyle = grad;
     x.fillRect(0, 0, 4, 256);
     scene.background?.dispose?.();
     scene.background = new THREE.CanvasTexture(c);
     scene.background.colorSpace = THREE.SRGBColorSpace;
-    scene.fog.color.set(lerpHex("#e8e5c9", "#d6f3e4", progress));
+    scene.fog.color.set(mix("#e8e5c9", "#d6f3e4", 1));
     grassMat.color.set(lerpHex("#a6a16f", "#64a95c", progress));
     hillFar.color.set(lerpHex("#b4cbb0", "#86c58b", progress));
     hillNear.color.set(lerpHex("#a8c4a5", "#6eb875", progress));
@@ -101,9 +106,9 @@ export function createScene3D(canvas, wrap, g) {
     // Luz: cinza e baixa na cidade poluída, quente e viva na cidade restaurada.
     hemi.color.set(lerpHex("#cfd3c4", "#fffbea", progress));
     hemi.groundColor.set(lerpHex("#8c8468", "#b9a97a", progress));
-    hemi.intensity = 1.05 + 0.5 * progress;
+    hemi.intensity = (1.05 + 0.5 * progress) * (1 - 0.3 * storm);
     sun.color.set(lerpHex("#e6dcc0", "#fff0c2", progress));
-    sun.intensity = 0.6 + 0.6 * progress;
+    sun.intensity = (0.6 + 0.6 * progress) * (1 - 0.5 * storm);
   }
 
   function hills(width, z, material, base, amp, seed) {
@@ -143,21 +148,76 @@ export function createScene3D(canvas, wrap, g) {
     parent.add(inst);
   }
 
+  // Elementos da fase de enchente: ponto alto, bueiros, lixo, moradores, água e chuva.
+  function buildFlood(W) {
+    const z = g.safeZone;
+    if (z) {
+      const w = z.w / U;
+      root.add(box("#4e9860", [w, 0.2, PLATFORM_DEPTH + 0.2], [X(z.x) + w / 2, Y(z.y) + 0.1, 0]));
+      const sign = bannerSprite("PONTO ALTO");
+      sign.position.set(X(z.x) + w / 2, Y(z.y) + 1.9, 0);
+      root.add(sign);
+      root.add(cyl("#596f68", 0.05, 1.5, [X(z.x) + w / 2, Y(z.y) + 0.85, 0]));
+    }
+    for (const d of g.drains) {
+      const m = makeDrain();
+      m.position.set(X(d.x), 0, 0);
+      m.userData.d = d;
+      root.add(m);
+      dyn.drains.push(m);
+    }
+    for (const d of g.debris) {
+      const m = makeDebris(d.kind, d.color);
+      m.position.set(X(d.x), Y(d.y) - 0.35, 0);
+      m.userData.d = d;
+      root.add(m);
+      dyn.debris.push(m);
+    }
+    g.residents.forEach((_, i) => {
+      const m = makeResident(i);
+      root.add(m.root);
+      dyn.residents.push(m);
+    });
+
+    // Água: volume translúcido + superfície com ondas que acompanha a câmera.
+    const waterMat = new THREE.MeshLambertMaterial({ color: "#3880aa", transparent: true, opacity: 0.5, depthWrite: false });
+    dyn.waterBody = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), waterMat);
+    dyn.waterBody.scale.set(W + 160, 1, 29);
+    dyn.waterBody.position.set(W / 2 - 10, 0, -5.5);
+    dyn.waterBody.visible = false;
+    root.add(dyn.waterBody);
+    const sg = new THREE.PlaneGeometry(70, 29, 70, 29);
+    sg.rotateX(-Math.PI / 2);
+    dyn.waterSurface = new THREE.Mesh(sg, new THREE.MeshLambertMaterial({ color: "#9bd4ee", transparent: true, opacity: 0.8, depthWrite: false }));
+    dyn.waterSurface.position.z = -5.5;
+    dyn.waterSurface.visible = false;
+    root.add(dyn.waterSurface);
+
+    // Chuva: 320 riscos que caem em volta da câmera.
+    const N = 320;
+    dyn.rain = { n: N, drops: [], geo: new THREE.BufferGeometry() };
+    for (let i = 0; i < N; i++) dyn.rain.drops.push({ x: (Math.random() - 0.5) * 40, y: Math.random() * 16, z: -14 + Math.random() * 24 });
+    dyn.rain.geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * 6), 3));
+    dyn.rain.lines = new THREE.LineSegments(dyn.rain.geo, new THREE.LineBasicMaterial({ color: "#d6e8f5", transparent: true, opacity: 0.45, fog: false }));
+    dyn.rain.lines.frustumCulled = false;
+    root.add(dyn.rain.lines);
+  }
+
   function build() {
     if (root) scene.remove(root);
     root = new THREE.Group();
     scene.add(root);
     const L = g.level;
     const W = X(L.width);
-    dyn = { seeds: [], trash: [], hazards: [], cps: [], trees: [], chimneys: [], planted: new Map(), clouds: [], particles: [] };
+    dyn = { seeds: [], trash: [], hazards: [], cps: [], trees: [], chimneys: [], planted: new Map(), clouds: [], particles: [], drains: [], debris: [], residents: [] };
 
     // Chão: terra + faixa de grama.
-    root.add(box("#786f5b", [W + 160, 8, 29], [W / 2 - 10, -4, -5.5]));
+    root.add(box("#786f5b", [W + 160, 8, 29], [W / 2 - 10, -4, -5.5], { outline: false }));
     // Calçada (pista do jogador, z ≈ -1.8..1.8) com meio-fio e faixas.
-    root.add(box("#b9b393", [W + 160, 0.14, 4.6], [W / 2 - 10, 0.02, 0.0]));
-    root.add(box("#8e8a72", [W + 160, 0.2, 0.2], [W / 2 - 10, 0.04, 2.35]));
-    root.add(box("#8e8a72", [W + 160, 0.2, 0.2], [W / 2 - 10, 0.04, -2.35]));
-    for (let x = -4; x < W + 20; x += 2.4) root.add(box("#9d9879", [1.2, 0.03, 0.12], [x, 0.1, 0.0]));
+    root.add(box("#b9b393", [W + 160, 0.14, 4.6], [W / 2 - 10, 0.02, 0.0], { outline: false }));
+    root.add(box("#8e8a72", [W + 160, 0.2, 0.2], [W / 2 - 10, 0.04, 2.35], { outline: false }));
+    root.add(box("#8e8a72", [W + 160, 0.2, 0.2], [W / 2 - 10, 0.04, -2.35], { outline: false }));
+    for (let x = -4; x < W + 20; x += 2.4) root.add(box("#9d9879", [1.2, 0.03, 0.12], [x, 0.1, 0.0], { outline: false }));
     const grass = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), grassMat);
     grass.scale.set(W + 160, 0.3, 29);
     grass.position.set(W / 2 - 10, -0.1, -5.5);
@@ -196,14 +256,14 @@ export function createScene3D(canvas, wrap, g) {
         b.add(sphere("#6b6f55", s, [0, s * 0.7, 0], {}));
         b.add(sphere("#7d8264", s * 0.7, [s * 0.8, s * 0.5, 0.2], {}));
         b.position.set(x, 0, 6 + rnd() * 2.5);
-        b.traverse((o) => o.isMesh && (o.material = bushMat));
+        b.traverse((o) => o.isMesh && o.material.side !== THREE.BackSide && (o.material = bushMat));
         root.add(b);
       }
-      for (let x = 8; x < W + 20; x += 30 + rnd() * 12) {
+      for (let x = 22; x < W + 20; x += 42 + rnd() * 14) {
         const pole = new THREE.Group();
         pole.add(cyl("#4a3f33", 0.09, 9, [0, 4.5, 0]));
         pole.add(box("#4a3f33", [1.6, 0.12, 0.12], [0, 8.2, 0]));
-        pole.position.set(x, 0, 9.5);
+        pole.position.set(x, 0, 12.5);
         root.add(pole);
       }
     }
@@ -254,9 +314,11 @@ export function createScene3D(canvas, wrap, g) {
     }
     dyn.finish = makeFlag(3.1, 1.6);
     dyn.finish.position.set(X(L.width - L.finishOffset), 0, 0);
-    dyn.finish.visible = !g.flood;
-    root.add(dyn.finish);
-    root.add(box("#4e9860", [2.5, 0.12, 1.6], [X(L.width - L.finishOffset) + 0.7, 0.06, 0]));
+    const finishPad = box("#4e9860", [2.5, 0.12, 1.6], [X(L.width - L.finishOffset) + 0.7, 0.06, 0]);
+    dyn.finish.visible = finishPad.visible = !g.flood;
+    root.add(dyn.finish, finishPad);
+
+    if (g.flood) buildFlood(W);
 
     for (const h of g.hazards) {
       let m;
@@ -294,29 +356,27 @@ export function createScene3D(canvas, wrap, g) {
     }
 
     cache = { seeds: g.seeds, decor: g.decor, platforms: g.platforms, level: g.level };
-    skyProgress = -1;
+    skyProgress = "";
   }
 
   // ------------------------------------------------------------ quadro
   function render() {
     if (cache.seeds !== g.seeds || cache.decor !== g.decor || cache.level !== g.level) build();
     const now = performance.now() / 1000;
+    const dt = Math.min(Math.max(now - lastNow, 0.001), 0.05);
+    lastNow = now;
     const L = g.level;
     const progress = g.seedGoal ? clamp(g.collected / g.seedGoal, 0, 1) : 0;
-    setSky(Math.round(progress * 13) / 13);
+    const f = g.flood;
+    const storm = f ? Math.round((0.45 + 0.55 * (f.h / f.cfg.maxHeight)) * 8) / 8 : 0;
+    setSky(Math.round(progress * 13) / 13, storm);
 
     // Jogador.
     const p = g.player;
     const pl = dyn.player;
     pl.root.position.set(X(p.x + p.w / 2), Y(p.y + p.h), 0);
     pl.root.visible = !(p.inv > 0 && Math.floor(now * 11) % 2 === 0);
-    const targetRot = p.face >= 0 ? 0 : Math.PI;
-    pl.body.rotation.y += (targetRot - pl.body.rotation.y) * 0.25;
-    const swing = p.onGround && Math.abs(p.vx) > 0 ? Math.sin(p.walk) * 0.8 : p.onGround ? 0 : 0.5;
-    pl.legL.rotation.z = swing;
-    pl.legR.rotation.z = -swing;
-    pl.armL.rotation.z = -swing * 0.8;
-    pl.armR.rotation.z = swing * 0.8;
+    animatePerson(pl, { onGround: p.onGround, vx: p.vx, vy: p.vy, walk: p.walk, face: p.face, now, dt });
 
     // Sementes e lixo reciclável.
     for (const m of dyn.seeds) {
@@ -348,6 +408,56 @@ export function createScene3D(canvas, wrap, g) {
           pf.position.set(d.x + Math.sin(now * 2.2 + d.phase) * 0.12, d.y + Math.sin(now * 3 + d.phase) * 0.06, 0);
         }
       }
+    }
+
+    // Fase de enchente: bueiros, lixo, moradores, água e chuva.
+    if (f) {
+      for (const m of dyn.drains) {
+        const d = m.userData.d;
+        m.userData.clog.visible = d.clogged;
+        m.userData.clog.userData.warn.position.y = 1.5 + Math.sin(now * 7) * 0.07;
+      }
+      for (const m of dyn.debris) m.visible = !m.userData.d.got;
+      g.residents.forEach((r, i) => {
+        const m = dyn.residents[i];
+        if (!m) return;
+        const carried = r.state === "carried";
+        m.root.visible = r.state !== "lost";
+        m.root.position.set(X(r.x + r.w / 2), Y(r.y + r.h), 0);
+        animatePerson(m, {
+          onGround: true,
+          vx: carried ? p.vx : 0,
+          walk: carried ? p.walk : 0,
+          vy: 0,
+          face: carried ? p.face : p.x > r.x ? 1 : -1,
+          waving: r.state === "waiting" || r.state === "safe",
+          now,
+          dt,
+        });
+        m.alert.visible = r.danger && r.state === "waiting";
+        m.alert.position.y = 2.5 + Math.sin(now * 8) * 0.08;
+      });
+      const hh = f.h / U;
+      dyn.waterBody.visible = dyn.waterSurface.visible = hh > 0.02;
+      dyn.waterBody.scale.y = Math.max(hh, 0.001);
+      dyn.waterBody.position.y = hh / 2;
+      dyn.waterSurface.position.x = camX;
+      dyn.waterSurface.position.y = hh + 0.01;
+      const sp = dyn.waterSurface.geometry.attributes.position;
+      for (let i = 0; i < sp.count; i++) {
+        const wx = sp.getX(i) + camX;
+        sp.setY(i, Math.sin(wx * 0.8 + now * 2.4) * 0.07 + Math.sin(sp.getZ(i) * 0.7 + now * 1.7) * 0.05);
+      }
+      sp.needsUpdate = true;
+      const rp = dyn.rain.geo.attributes.position;
+      dyn.rain.drops.forEach((d, i) => {
+        d.y -= 17 * dt;
+        if (d.y < 0) d.y += 16;
+        const x = camX + d.x;
+        rp.setXYZ(i * 2, x, d.y, d.z);
+        rp.setXYZ(i * 2 + 1, x - 0.08, d.y + 0.55, d.z);
+      });
+      rp.needsUpdate = true;
     }
 
     // Bandeiras.
@@ -409,7 +519,7 @@ export function createScene3D(canvas, wrap, g) {
     camX += (clamp(px + 2.6, minX, maxX) - camX) * 0.12;
     const shake = g.shake > 0 ? g.shake * 0.8 : 0;
     camera.position.set(camX + CAM_SIDE + (Math.random() - 0.5) * shake, CAM_H + (Math.random() - 0.5) * shake, camDist);
-    camera.lookAt(camX, 4.0, 0);
+    camera.lookAt(window.__lookX ?? camX, window.__lookY ?? 4.0, 0);
     dyn.sun.position.set(camX + 11, 12, -75);
 
     sun.position.set(px + 12, 24, 14);
