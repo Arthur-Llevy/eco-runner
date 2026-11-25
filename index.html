@@ -91,9 +91,11 @@
 
       .stats {
         display: flex;
-        gap: 16px;
+        align-items: center;
+        gap: 14px;
         font-size: 13px;
         font-weight: 900;
+        pointer-events: auto;
       }
 
       .stat {
@@ -107,20 +109,45 @@
         font-variant-numeric: tabular-nums;
       }
 
+      .hud-btn {
+        border: 1px solid var(--line);
+        background: #e6edda;
+        color: var(--ink);
+        border-radius: 10px;
+        padding: 5px 9px;
+        font-size: 13px;
+        font-weight: 900;
+        cursor: pointer;
+        box-shadow: none;
+        line-height: 1;
+      }
+
+      .hud-btn:hover {
+        background: #d7e5c3;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .hud-btn:active {
+        transform: scale(0.95);
+        box-shadow: none;
+      }
+
       #toast {
         position: absolute;
-        top: 94px;
+        top: 104px;
         left: 50%;
         transform: translate(-50%, -8px);
         opacity: 0;
-        padding: 10px 17px;
+        max-width: min(560px, 90vw);
+        padding: 10px 18px;
         border-radius: 999px;
-        background: #17352ded;
+        background: #17352df2;
         color: white;
         font-size: 13px;
         font-weight: 800;
         box-shadow: 0 8px 22px #17352d25;
-        transition: 0.2s;
+        transition: 0.25s;
         pointer-events: none;
         text-align: center;
       }
@@ -278,7 +305,7 @@
         }
 
         .stats {
-          gap: 9px;
+          gap: 8px;
           font-size: 11px;
         }
 
@@ -316,6 +343,22 @@
           <div class="stat">🌱 <b id="seeds">0 / 8</b></div>
           <div class="stat">♥ <b id="lives">3</b></div>
           <div class="stat">★ <b id="score">000</b></div>
+          <button
+            class="hud-btn"
+            id="btn-mute"
+            title="Ativar ou silenciar som"
+            aria-label="Alternar som"
+          >
+            🔊
+          </button>
+          <button
+            class="hud-btn"
+            id="btn-restart"
+            title="Reiniciar fase"
+            aria-label="Reiniciar fase"
+          >
+            ↻
+          </button>
         </div>
       </div>
 
@@ -327,17 +370,17 @@
           <h1>ECO<br /><em>RUNNER.</em></h1>
           <p>
             A cidade perdeu suas áreas verdes. Corra pelos telhados e parques,
-            desvie da poluição e recolha sementes para trazer a natureza de
-            volta.
+            desvie da poluição e recolha 8 sementes para restaurar o ecossistema
+            urbano.
           </p>
           <div class="tips">
             <span>← → MOVER</span>
             <span>ESPAÇO PULAR</span>
-            <span>8 SEMENTES</span>
+            <span>8 SEMENTES = CIDADE VERDE</span>
           </div>
           <button id="action">COMEÇAR A JOGAR&nbsp; →</button>
           <div class="footnote">
-            Jogo 2D • Feito em HTML, CSS e JavaScript Canvas
+            Jogo 2D • HTML5 Canvas, Web Audio API e JavaScript
           </div>
         </div>
       </div>
@@ -360,8 +403,87 @@
         const wrap = document.getElementById("game-wrap");
         const $ = (id) => document.getElementById(id);
 
+        // --- SISTEMA DE ÁUDIO PROCEDURAL (WEB AUDIO API) ---
+        let audioCtx = null;
+        let muted = false;
+
+        function ensureAudio() {
+          if (!audioCtx) {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx) audioCtx = new Ctx();
+          }
+          if (audioCtx && audioCtx.state === "suspended") {
+            audioCtx.resume();
+          }
+        }
+
+        function playTone(
+          freq,
+          endFreq,
+          duration,
+          type = "sine",
+          vol = 0.12,
+          delay = 0,
+        ) {
+          if (muted) return;
+          ensureAudio();
+          if (!audioCtx) return;
+          const now = audioCtx.currentTime + delay;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, now);
+          if (endFreq !== freq) {
+            osc.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
+          }
+          gain.gain.setValueAtTime(vol, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + duration);
+        }
+
+        const sfx = {
+          jump: () => playTone(260, 520, 0.14, "triangle", 0.11),
+          seed: () => {
+            playTone(587.33, 587.33, 0.09, "sine", 0.12, 0);
+            playTone(880, 880, 0.16, "sine", 0.12, 0.07);
+          },
+          hit: () => playTone(190, 75, 0.25, "sawtooth", 0.12),
+          win: () => {
+            [523.25, 659.25, 783.99, 1046.5].forEach((note, i) => {
+              playTone(note, note, 0.18, "triangle", 0.12, i * 0.09);
+            });
+          },
+        };
+
+        $("btn-mute").addEventListener("click", () => {
+          muted = !muted;
+          $("btn-mute").textContent = muted ? "🔇" : "🔊";
+          if (!muted) sfx.jump();
+        });
+
+        $("btn-restart").addEventListener("click", () => {
+          start();
+        });
+
+        // --- MENSAGENS EDUCATIVAS SOBRE A ODS 11 ---
+        const ODS_MESSAGES = [
+          "ODS 11.7: Áreas verdes públicas reduzem ilhas de calor nas cidades!",
+          "ODS 11.6: Menos fumaça industrial melhora a qualidade do ar urbano.",
+          "ODS 11.2: Transporte limpo e ciclovias diminuem emissões de CO₂.",
+          "ODS 11.6: Gestão correta de resíduos evita enchentes e poluição.",
+          "ODS 11.B: Cidades arborizadas são mais resilientes às mudanças climáticas.",
+          "ODS 11.3: Urbanização sustentável equilibra moradia e meio ambiente.",
+          "ODS 11.A: Preservar parques conecta comunidades e biodiversidade.",
+          "🌳 Meta atingida! A cidade foi reflorestada. Siga até a bandeira!",
+        ];
+
+        const WORLD_H = 720;
         let W = 1200,
           H = 720,
+          VW = 1200,
           DPR = 1,
           scale = 1;
         const WORLD_W = 3300,
@@ -369,6 +491,7 @@
         let camera = 0,
           last = 0,
           toastTime = 0,
+          shakeTime = 0,
           gameState = "menu";
 
         const keys = { left: false, right: false, jump: false };
@@ -388,7 +511,6 @@
         };
 
         let seeds = [],
-          trash = [],
           hazards = [],
           platforms = [],
           decor = [],
@@ -396,11 +518,20 @@
         let collected = 0,
           lives = 3,
           score = 0,
-          checkpoint = 90,
-          levelRestored = false;
+          checkpoint = 90;
 
         const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
         const rand = (a, b) => a + Math.random() * (b - a);
+        const lerp = (a, b, t) => a + (b - a) * t;
+
+        function lerpHex(hexA, hexB, t) {
+          const a = parseInt(hexA.slice(1), 16);
+          const b = parseInt(hexB.slice(1), 16);
+          const r = Math.round(lerp((a >> 16) & 255, (b >> 16) & 255, t));
+          const g = Math.round(lerp((a >> 8) & 255, (b >> 8) & 255, t));
+          const bl = Math.round(lerp(a & 255, b & 255, t));
+          return `rgb(${r}, ${g}, ${bl})`;
+        }
 
         function resize() {
           const r = wrap.getBoundingClientRect();
@@ -409,7 +540,8 @@
           canvas.height = Math.floor(r.height * DPR);
           W = r.width;
           H = r.height;
-          scale = H / 720;
+          scale = H / WORLD_H;
+          VW = W / scale;
           ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
         }
         addEventListener("resize", resize);
@@ -423,26 +555,51 @@
           seeds.push({ x, y, r: 10, t: Math.random() * 6, got: false });
         }
 
-        function hazard(x, y, type = "smog") {
+        function hazard(x, y, type = "smog", phaseOffset = Math.random() * 4) {
+          const dims = {
+            bin: { w: 32, h: 35 },
+            smog: { w: 46, h: 28 },
+            vent: { w: 26, h: 148 },
+          };
+          const { w, h } = dims[type] || dims.smog;
           hazards.push({
             x,
             y,
-            w: type === "bin" ? 34 : 42,
-            h: type === "bin" ? 35 : 38,
+            w,
+            h,
             type,
-            phase: Math.random() * 6,
+            phase: phaseOffset,
           });
+        }
+
+        // Calcula o estado atual do tubo de vapor (ciclo de 4.2 segundos)
+        function getVentState(h, nowSec) {
+          const cycle = 4.2;
+          const t = (nowSec + h.phase) % cycle;
+          if (t < 1.8) {
+            return { state: "idle", height: 0 };
+          }
+          if (t < 2.45) {
+            return { state: "warn", height: 0 };
+          }
+          if (t < 2.65) {
+            const p = (t - 2.45) / 0.2;
+            return { state: "active", height: h.h * p };
+          }
+          if (t < 3.95) {
+            return { state: "active", height: h.h };
+          }
+          const p = 1 - (t - 3.95) / 0.25;
+          return { state: "active", height: Math.max(0, h.h * p) };
         }
 
         function buildLevel() {
           platforms = [];
           seeds = [];
-          trash = [];
           hazards = [];
           decor = [];
           particles = [];
 
-          // Passagens e plataformas com vãos que exigem saltos.
           platform(0, GROUND, WORLD_W, 22, "ground");
           platform(355, 492, 145, 18, "roof");
           platform(575, 425, 150, 18, "roof");
@@ -456,7 +613,6 @@
           platform(2615, 420, 170, 18, "roof");
           platform(2895, 485, 175, 18, "roof");
 
-          // Pequenas plataformas de apoio nos trechos mais longos.
           platform(505, 545, 58, 14, "step");
           platform(760, 535, 58, 14, "step");
           platform(1000, 545, 58, 14, "step");
@@ -468,7 +624,6 @@
           platform(2560, 545, 58, 14, "step");
           platform(2840, 535, 58, 14, "step");
 
-          // Sementes: algumas no caminho principal, outras nas plataformas.
           [
             [230, 530],
             [410, 450],
@@ -485,22 +640,23 @@
             [3150, 530],
           ].forEach(([x, y]) => seed(x, y));
 
-          // Perigos baixos e nuvens de poluição.
+          // Perigos: nuvem de fumaça translúcida (smog), lixeira (bin) e tubo subterrâneo de vapor (vent)
           [
-            [300, GROUND - 23, "smog"],
-            [700, GROUND - 20, "bin"],
-            [950, GROUND - 22, "smog"],
-            [1200, GROUND - 20, "bin"],
-            [1450, GROUND - 22, "smog"],
-            [1710, GROUND - 20, "bin"],
-            [1980, GROUND - 22, "smog"],
-            [2240, GROUND - 20, "bin"],
-            [2500, GROUND - 22, "smog"],
-            [2780, GROUND - 20, "bin"],
-            [3070, GROUND - 22, "smog"],
+            [305, GROUND - 38, "smog", 0.2],
+            [535, GROUND, "vent", 0.0],
+            [725, GROUND - 18, "bin", 0],
+            [965, GROUND - 42, "smog", 1.7],
+            [1185, GROUND, "vent", 1.4],
+            [1445, GROUND - 18, "bin", 0],
+            [1695, GROUND - 40, "smog", 2.8],
+            [1965, GROUND, "vent", 0.6],
+            [2220, GROUND - 18, "bin", 0],
+            [2485, GROUND - 42, "smog", 1.1],
+            [2765, GROUND, "vent", 2.2],
+            [3055, GROUND - 38, "smog", 3.1],
           ].forEach((v) => hazard(...v));
 
-          // Edifícios ao fundo, postes, árvores secas e detalhes.
+          let treeIndex = 0;
           for (
             let x = -40, i = 0;
             x < WORLD_W + 100;
@@ -509,16 +665,17 @@
             const bw = rand(75, 125),
               bh = rand(150, 330);
             decor.push({ type: "building", x, bw, bh, tint: i % 3 });
-            if (i % 3 === 1)
+            if (i % 2 === 1) {
               decor.push({
                 type: "deadTree",
+                treeId: treeIndex++,
                 x: x + rand(-20, 20),
                 y: GROUND - 5,
               });
+            }
             if (i % 4 === 0) decor.push({ type: "lamp", x: x + 55 });
           }
 
-          // Trecho final: jardim restaurado.
           for (let x = 3150; x < WORLD_W; x += 100) {
             decor.push({ type: "greenTree", x, y: GROUND - 5 });
           }
@@ -527,7 +684,7 @@
           collected = 0;
           lives = 3;
           score = 0;
-          levelRestored = false;
+          shakeTime = 0;
           player.x = 90;
           player.y = GROUND - player.h;
           player.vx = 0;
@@ -543,17 +700,18 @@
           $("score").textContent = String(score).padStart(3, "0");
         }
 
-        function say(text) {
+        function say(text, duration = 3.2) {
           $("toast").textContent = text;
           $("toast").classList.add("show");
-          toastTime = 2.3;
+          toastTime = duration;
         }
 
         function start() {
+          ensureAudio();
           buildLevel();
           gameState = "playing";
           $("overlay").style.display = "none";
-          say("Encontre as sementes e ajude a cidade!");
+          say("Colete 8 sementes para limpar o ar e reflorestar a cidade!", 3.0);
         }
         $("action").addEventListener("click", start);
 
@@ -622,50 +780,148 @@
           ctx.fill();
         }
 
-        function drawBackground() {
-          const sky = ctx.createLinearGradient(0, 0, 0, H);
-          sky.addColorStop(0, "#b8d9d0");
-          sky.addColorStop(0.72, "#e8e5c9");
-          sky.addColorStop(1, "#d3cda9");
-          ctx.fillStyle = sky;
-          ctx.fillRect(0, 0, W, H);
+        // Fumaça translúcida em camadas suaves (sem contorno)
+        function drawSmokeHazard(cx, cy, t, phase) {
+          const drift = Math.sin(t * 2.2 + phase) * 5;
+          const pulse = 1 + Math.sin(t * 3.1 + phase) * 0.06;
 
-          // Sol suave e nuvens.
-          circle(W * 0.78, 125, 47, "#f6e9a9");
+          ctx.save();
+          ctx.globalAlpha = 0.34;
+          drawCloud(cx - 22 + drift * 0.6, cy + 2, 0.78 * pulse, "#3b4744");
+
+          ctx.globalAlpha = 0.66;
+          drawCloud(cx - 17 + drift, cy, 0.62 * pulse, "#293330");
+
+          ctx.globalAlpha = 0.52;
+          circle(cx - 4 + drift * 1.2, cy - 3, 13 * pulse, "#1f2725");
+          circle(cx + 10 + drift * 0.9, cy + 1, 11 * pulse, "#1f2725");
+
+          for (let i = 0; i < 3; i++) {
+            const cycle = (t * 0.85 + phase + i * 0.33) % 1;
+            const py = cy - 10 - cycle * 28;
+            const px = cx - 10 + i * 10 + Math.sin(t * 4 + i) * 4;
+            ctx.globalAlpha = (1 - cycle) * 0.55;
+            circle(px, py, 5.5 - cycle * 2.5, "#36423f");
+          }
+          ctx.restore();
+        }
+
+        // Tubo vertical em cinza-chumbo industrial descendo reto até o fundo da terra
+        function drawSteamVent(h, nowSec) {
+          const x = h.x - camera;
+          const v = getVentState(h, nowSec);
+          const jitter = v.state === "warn" ? Math.sin(nowSec * 55) * 2.2 : 0;
+          const pipeDepth = WORLD_H - GROUND + 20;
+
+          // Corpo vertical descendo direto pela terra
+          rect(x - 11, GROUND + 5, 22, pipeDepth, "#323b39", 0);
+          // Faixa de reflexo metálico sutil
+          rect(x - 7, GROUND + 5, 5, pipeDepth, "#4a5653", 0);
+          // Anel/junta de reforço no meio do subsolo
+          rect(x - 14, GROUND + 64, 28, 8, "#252c2a", 2);
+
+          // Bocal do tubo na superfície
+          rect(x - 16 + jitter, GROUND - 8, 32, 13, "#3c4744", 3);
+          rect(x - 13 + jitter, GROUND - 11, 26, 4, "#232a28", 2);
+
+          // Aviso antes do disparo (faíscas quentes e vapor inicial)
+          if (v.state === "warn") {
+            circle(x, GROUND - 15, 4, "#f97316");
+            circle(x, GROUND - 15, 2, "#fde047");
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            circle(x - 6, GROUND - 20, 4.5, "#cbd5e1");
+            circle(x + 7, GROUND - 18, 4, "#cbd5e1");
+            ctx.restore();
+          }
+
+          // Coluna de vapor alta com núcleo vermelho-alaranjado de calor
+          if (v.state === "active" && v.height > 4) {
+            const topY = GROUND - 10 - v.height;
+            const wobble = Math.sin(nowSec * 14) * 2.5;
+            ctx.save();
+
+            // Camada externa de fumaça/vapor
+            ctx.globalAlpha = 0.42;
+            rect(x - 17, topY + 6, 34, Math.max(0, v.height - 6), "#64748b", 13);
+
+            // Corpo principal do vapor
+            ctx.globalAlpha = 0.62;
+            rect(x - 11, topY, 22, v.height, "#475569", 10);
+
+            // Núcleo vermelho-alaranjado superaquecido no centro do vapor
+            const heatH = v.height * 0.78;
+            const heatGrad = ctx.createLinearGradient(
+              0,
+              GROUND - 10,
+              0,
+              GROUND - 10 - heatH,
+            );
+            heatGrad.addColorStop(0, "rgba(239, 68, 68, 0.85)");
+            heatGrad.addColorStop(0.55, "rgba(249, 115, 22, 0.65)");
+            heatGrad.addColorStop(1, "rgba(250, 204, 21, 0.0)");
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = heatGrad;
+            ctx.beginPath();
+            ctx.roundRect(x - 6, GROUND - 10 - heatH, 12, heatH, 6);
+            ctx.fill();
+
+            // Nuvem borbulhante no topo da coluna
+            ctx.globalAlpha = 0.72;
+            circle(x - 8 + wobble, topY + 4, 12, "#526070");
+            circle(x + 8 - wobble, topY + 4, 12, "#526070");
+            circle(x, topY - 3, 13, "#6e7e91");
+
+            ctx.restore();
+          }
+        }
+
+        function drawBackground() {
+          const progress = clamp(collected / 8, 0, 1);
+
+          const sky = ctx.createLinearGradient(0, 0, 0, WORLD_H);
+          sky.addColorStop(0, lerpHex("#b8d9d0", "#7ec8e3", progress));
+          sky.addColorStop(0.72, lerpHex("#e8e5c9", "#d6f3e4", progress));
+          sky.addColorStop(1, lerpHex("#d3cda9", "#bce3c5", progress));
+          ctx.fillStyle = sky;
+          ctx.fillRect(0, 0, VW + 10, WORLD_H);
+
+          circle(VW * 0.78, 125, 47, lerpHex("#f6e9a9", "#fff3a1", progress));
+          const cloudColor = lerpHex("#dce8d9", "#ffffff", progress);
+          const span = VW + 220;
           drawCloud(
-            ((((160 - camera * 0.16) % (W + 180)) + W + 180) % (W + 180)) - 80,
+            ((((160 - camera * 0.16) % span) + span) % span) - 90,
             125,
             0.85,
-            "#dce8d9",
+            cloudColor,
           );
           drawCloud(
-            ((((690 - camera * 0.12) % (W + 180)) + W + 180) % (W + 180)) - 80,
+            ((((690 - camera * 0.12) % span) + span) % span) - 90,
             205,
             0.65,
-            "#dce8d9",
+            cloudColor,
           );
 
-          // Colinas.
-          ctx.fillStyle = "#a8c4a5";
+          ctx.fillStyle = lerpHex("#a8c4a5", "#6eb875", progress);
           ctx.beginPath();
-          ctx.moveTo(0, 440);
-          for (let x = 0; x <= W + 30; x += 30) {
+          ctx.moveTo(-10, 440);
+          for (let x = 0; x <= VW + 40; x += 25) {
             ctx.lineTo(
               x,
               400 +
                 Math.sin((x + camera * 0.12) * 0.006) * 32 +
-                Math.sin(x * 0.013) * 12,
+                Math.sin((x + camera * 0.12) * 0.013) * 12,
             );
           }
-          ctx.lineTo(W, H);
-          ctx.lineTo(0, H);
+          ctx.lineTo(VW + 40, GROUND + 10);
+          ctx.lineTo(-10, GROUND + 10);
+          ctx.closePath();
           ctx.fill();
 
-          // Silhuetas da cidade.
           for (const d of decor) {
             if (d.type !== "building") continue;
             const x = d.x - camera * 0.42;
-            if (x < -180 || x > W + 180) continue;
+            if (x < -180 || x > VW + 180) continue;
             const y = GROUND - d.bh * 0.48;
             const color = ["#879c96", "#91a49c", "#7e928c"][d.tint];
             rect(x, y, d.bw, d.bh, color, 4);
@@ -678,43 +934,60 @@
             }
           }
 
-          // Chaminés com fumaça discreta.
+          const smokeAlpha = clamp(1 - progress * 1.15, 0, 1);
           for (let x = 220; x < WORLD_W; x += 620) {
             const sx = x - camera * 0.42;
-            if (sx > -40 && sx < W + 40) {
+            if (sx > -40 && sx < VW + 40) {
               rect(sx, GROUND - 235, 23, 85, "#71847e", 4);
               rect(sx - 4, GROUND - 240, 31, 9, "#657973", 3);
-              drawCloud(
-                sx + 18,
-                GROUND - 270 + Math.sin(performance.now() * 0.0005 + x) * 5,
-                0.42,
-                "#9eaaa0",
-              );
+              if (smokeAlpha > 0.02) {
+                ctx.save();
+                ctx.globalAlpha = smokeAlpha;
+                drawCloud(
+                  sx + 18,
+                  GROUND - 270 + Math.sin(performance.now() * 0.0005 + x) * 5,
+                  0.42,
+                  "#9eaaa0",
+                );
+                ctx.restore();
+              }
             }
           }
         }
 
+        function drawGreenTree(x) {
+          rect(x, GROUND - 70, 12, 70, "#795a3e", 4);
+          circle(x + 6, GROUND - 88, 27, "#64a95c");
+          circle(x - 9, GROUND - 75, 18, "#83bd69");
+          circle(x + 22, GROUND - 73, 19, "#4f9857");
+        }
+
         function drawDecor() {
+          const progress = clamp(collected / 8, 0, 1);
+          const deadTrees = decor.filter((d) => d.type === "deadTree");
+          const restoredCount = Math.floor(deadTrees.length * progress);
+
           for (const d of decor) {
             const x = d.x - camera;
-            if (x < -90 || x > W + 90) continue;
+            if (x < -90 || x > VW + 90) continue;
 
             if (d.type === "deadTree") {
-              rect(x, GROUND - 82, 9, 82, "#826b50", 4);
-              ctx.strokeStyle = "#826b50";
-              ctx.lineWidth = 7;
-              ctx.lineCap = "round";
-              ctx.beginPath();
-              ctx.moveTo(x + 4, GROUND - 52);
-              ctx.lineTo(x - 17, GROUND - 78);
-              ctx.moveTo(x + 5, GROUND - 62);
-              ctx.lineTo(x + 24, GROUND - 91);
-              ctx.stroke();
+              if (d.treeId < restoredCount) {
+                drawGreenTree(x);
+              } else {
+                rect(x, GROUND - 82, 9, 82, "#826b50", 4);
+                ctx.strokeStyle = "#826b50";
+                ctx.lineWidth = 7;
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                ctx.moveTo(x + 4, GROUND - 52);
+                ctx.lineTo(x - 17, GROUND - 78);
+                ctx.moveTo(x + 5, GROUND - 62);
+                ctx.lineTo(x + 24, GROUND - 91);
+                ctx.stroke();
+              }
             } else if (d.type === "greenTree") {
-              rect(x, GROUND - 70, 12, 70, "#795a3e", 4);
-              circle(x + 6, GROUND - 88, 27, "#64a95c");
-              circle(x - 9, GROUND - 75, 18, "#83bd69");
-              circle(x + 22, GROUND - 73, 19, "#4f9857");
+              drawGreenTree(x);
             } else if (d.type === "lamp") {
               rect(x, GROUND - 105, 5, 105, "#596f68", 2);
               rect(x - 10, GROUND - 108, 26, 8, "#596f68", 3);
@@ -724,23 +997,34 @@
         }
 
         function drawWorld() {
-          // Chão em blocos com uma faixa de grama seca.
-          rect(0, GROUND, WORLD_W, 160, "#786f5b");
-          rect(0, GROUND, WORLD_W, 13, "#a6a16f");
-          rect(0, GROUND + 13, WORLD_W, 5, "#655e50");
+          const progress = clamp(collected / 8, 0, 1);
+          const nowSec = performance.now() * 0.001;
+
+          // Camada de terra e grama minimalista
+          rect(-10, GROUND, VW + 20, WORLD_H - GROUND + 20, "#786f5b");
+          rect(
+            -10,
+            GROUND,
+            VW + 20,
+            13,
+            lerpHex("#a6a16f", "#64a95c", progress),
+          );
+          rect(-10, GROUND + 13, VW + 20, 5, "#655e50");
+
+          // Detalhes sutis de solo
           for (
             let x = Math.floor(camera / 55) * 55;
-            x < camera + W + 60;
+            x < camera + VW + 60;
             x += 55
           ) {
             const sx = x - camera;
-            rect(sx, GROUND + 34, 24, 4, "#897d65", 2);
-            rect(sx + 29, GROUND + 75, 13, 3, "#897d65", 2);
+            rect(sx, GROUND + 36, 24, 4, "#897d65", 2);
+            rect(sx + 29, GROUND + 86, 13, 3, "#897d65", 2);
           }
 
           platforms.forEach((p) => {
             const x = p.x - camera;
-            if (x + p.w < 0 || x > W) return;
+            if (x + p.w < 0 || x > VW) return;
             if (p.type === "ground") return;
             rect(
               x,
@@ -756,36 +1040,34 @@
             }
           });
 
-          // Obstáculos.
           hazards.forEach((h) => {
             const x = h.x - camera;
-            if (x < -70 || x > W + 70) return;
+            if (x < -110 || x > VW + 110) return;
             if (h.type === "bin") {
-              rect(x - h.w / 2, h.y - h.h / 2, h.w, h.h, "#477f70", 5);
+              rect(x - h.w / 2, h.y - h.h / 2, h.w, h.h, "#c45d3b", 5);
               rect(
                 x - h.w / 2 - 3,
                 h.y - h.h / 2 - 5,
                 h.w + 6,
                 8,
-                "#315f53",
+                "#943e23",
                 3,
               );
-              rect(x - 7, h.y - 4, 14, 4, "#c3dfad", 2);
-              rect(x - 4, h.y + 5, 8, 8, "#c3dfad", 2);
+              rect(x - 7, h.y - 4, 14, 4, "#fde68a", 2);
+              rect(x - 4, h.y + 5, 8, 8, "#fde68a", 2);
+            } else if (h.type === "vent") {
+              drawSteamVent(h, nowSec);
             } else {
-              const bob = Math.sin(performance.now() * 0.002 + h.phase) * 4;
-              drawCloud(x, h.y + bob, 0.72, "#82988c");
-              circle(x - 12, h.y - 4 + bob, 4, "#a8b8a9");
-              circle(x + 15, h.y + 6 + bob, 3, "#a8b8a9");
+              const bob = Math.sin(nowSec * 2.4 + h.phase) * 5;
+              drawSmokeHazard(x, h.y + bob, nowSec, h.phase);
             }
           });
 
-          // Sementes.
           seeds.forEach((s) => {
             if (s.got) return;
             const x = s.x - camera;
             const y = s.y + Math.sin(performance.now() * 0.003 + s.t) * 5;
-            if (x < -30 || x > W + 30) return;
+            if (x < -30 || x > VW + 30) return;
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate(Math.sin(performance.now() * 0.002 + s.t) * 0.18);
@@ -801,16 +1083,14 @@
             circle(x - 10, y + 10, 2, "#f6e9a9");
           });
 
-          // Partículas.
           particles.forEach((p) => {
             circle(p.x - camera, p.y, p.r, p.color);
           });
 
-          // Linha de chegada.
           const fx = WORLD_W - 115 - camera;
-          if (fx > -100 && fx < W + 100) {
+          if (fx > -100 && fx < VW + 100) {
             rect(fx, GROUND - 125, 7, 125, "#f6f0d9", 3);
-            ctx.fillStyle = "#4d9b63";
+            ctx.fillStyle = collected >= 8 ? "#4d9b63" : "#9aa89e";
             ctx.beginPath();
             ctx.moveTo(fx + 7, GROUND - 123);
             ctx.lineTo(fx + 74, GROUND - 102);
@@ -831,24 +1111,20 @@
           if (player.face < 0) ctx.scale(-1, 1);
           const run = player.onGround ? Math.sin(player.walk) * 3 : 0;
 
-          // Sombra.
           ctx.fillStyle = "#314b3d35";
           ctx.beginPath();
           ctx.ellipse(0, player.h / 2 + 3, 19, 5, 0, 0, Math.PI * 2);
           ctx.fill();
 
-          // Mochila.
           rect(-19, -4, 11, 20, "#d18c4c", 4);
-          // Pernas.
           rect(-11, 8 + run, 9, 16, "#315b4c", 4);
           rect(3, 8 - run, 9, 16, "#315b4c", 4);
           rect(-13, 20 + run, 13, 6, "#e9e2c9", 3);
           rect(1, 20 - run, 13, 6, "#e9e2c9", 3);
-          // Corpo e braços.
           rect(-13, -12, 26, 26, "#3f9668", 8);
           rect(-18, -8, 7, 17, "#e9c18c", 4);
           rect(11, -8, 7, 17, "#e9c18c", 4);
-          // Lenço.
+
           ctx.fillStyle = "#d5f06d";
           ctx.beginPath();
           ctx.moveTo(-10, -8);
@@ -856,9 +1132,8 @@
           ctx.lineTo(7, -1);
           ctx.lineTo(-8, -1);
           ctx.fill();
-          // Cabeça.
+
           circle(0, -20, 13, "#e8bd91");
-          // Cabelo.
           ctx.fillStyle = "#394b3e";
           ctx.beginPath();
           ctx.arc(0, -24, 13, Math.PI, Math.PI * 2);
@@ -866,7 +1141,7 @@
           ctx.lineTo(-12, -20);
           ctx.fill();
           circle(5, -19, 1.6, "#24352d");
-          // Folhinha no cabelo.
+
           ctx.strokeStyle = "#4d965a";
           ctx.lineWidth = 2;
           ctx.beginPath();
@@ -916,64 +1191,77 @@
           if (jumpPressed && player.onGround) {
             player.vy = -570;
             player.onGround = false;
+            sfx.jump();
           }
           jumpPressed = false;
 
           if (Math.abs(player.vx) > 0 && player.onGround)
             player.walk += dt * 13;
           if (player.inv > 0) player.inv -= dt;
+          if (shakeTime > 0) shakeTime -= dt;
 
-          // Sementes e colisões com perigos.
           for (const s of seeds) {
             if (s.got) continue;
-            const sx = s.x,
-              sy = s.y;
-            const dx = player.x + player.w / 2 - sx;
-            const dy = player.y + player.h / 2 - sy;
+            const dx = player.x + player.w / 2 - s.x;
+            const dy = player.y + player.h / 2 - s.y;
             if (dx * dx + dy * dy < 34 * 34) {
               s.got = true;
               collected++;
               score += 100;
+              sfx.seed();
               updateHUD();
-              for (let i = 0; i < 9; i++) {
+              for (let i = 0; i < 12; i++) {
                 particles.push({
                   x: s.x,
                   y: s.y,
-                  vx: rand(-70, 70),
-                  vy: rand(-130, -20),
-                  life: 0.65,
-                  r: rand(2, 4),
+                  vx: rand(-80, 80),
+                  vy: rand(-140, -25),
+                  life: 0.7,
+                  r: rand(2.5, 4.5),
                   color: "#c9f36a",
                 });
               }
-              say(
-                collected === 8
-                  ? "Todas as sementes! O parque está quase salvo."
-                  : "+100 pontos · Semente coletada!",
-              );
-              if (collected >= 8) {
-                levelRestored = true;
-                say("🌳 Você recuperou a esperança da cidade!");
+              const msg =
+                ODS_MESSAGES[Math.min(collected - 1, ODS_MESSAGES.length - 1)];
+              say(msg, 3.6);
+            }
+          }
+
+          const nowSec = performance.now() * 0.001;
+          for (const h of hazards) {
+            if (player.inv > 0) break;
+
+            if (h.type === "vent") {
+              const v = getVentState(h, nowSec);
+              if (v.state === "active" && v.height > 12) {
+                const hx = h.x - h.w / 2;
+                const hy = GROUND - 10 - v.height;
+                if (
+                  player.x + player.w - 6 > hx &&
+                  player.x + 6 < hx + h.w &&
+                  player.y + player.h - 4 > hy &&
+                  player.y + 6 < GROUND - 10
+                ) {
+                  hit();
+                  break;
+                }
+              }
+            } else {
+              const hx = h.x - h.w / 2,
+                hy = h.y - h.h / 2;
+              if (
+                player.x + player.w - 6 > hx &&
+                player.x + 6 < hx + h.w &&
+                player.y + player.h - 4 > hy &&
+                player.y + 6 < hy + h.h
+              ) {
+                hit();
+                break;
               }
             }
           }
 
-          for (const h of hazards) {
-            const hx = h.x - h.w / 2,
-              hy = h.y - h.h / 2;
-            if (
-              player.inv <= 0 &&
-              player.x + player.w - 5 > hx &&
-              player.x + 5 < hx + h.w &&
-              player.y + player.h - 4 > hy &&
-              player.y + 5 < hy + h.h
-            ) {
-              hit();
-              break;
-            }
-          }
-
-          if (player.y > H + 100) hit();
+          if (player.y > WORLD_H + 100) hit();
 
           particles = particles.filter((p) => p.life > 0);
           particles.forEach((p) => {
@@ -983,19 +1271,30 @@
             p.life -= dt;
           });
 
-          if (player.x > WORLD_W - 100 && collected >= 8) finish();
-          camera = clamp(player.x - W * 0.34, 0, WORLD_W - W);
+          if (player.x > WORLD_W - 100) {
+            if (collected >= 8) {
+              finish();
+            } else if (toastTime <= 0) {
+              say(
+                `Faltam ${8 - collected} semente(s) para restaurar a cidade!`,
+                2.0,
+              );
+            }
+          }
+          camera = clamp(player.x - VW * 0.34, 0, Math.max(0, WORLD_W - VW));
         }
 
         function hit() {
           if (player.inv > 0) return;
           lives--;
+          shakeTime = 0.25;
+          sfx.hit();
           updateHUD();
           if (lives <= 0) {
             gameState = "over";
             showOverlay(
               "FIM DE JOGO",
-              "A cidade ainda precisa da sua ajuda. Tente novamente e recolha as sementes para recuperar o parque.",
+              "A cidade ainda precisa da sua ajuda. Tente novamente e recolha as 8 sementes para recuperar o parque.",
               "TENTAR DE NOVO",
             );
           } else {
@@ -1003,15 +1302,16 @@
             player.y = GROUND - player.h;
             player.vy = 0;
             player.inv = 1.5;
-            say("Cuidado! Você perdeu uma vida.");
+            say("Cuidado com a poluição! Você perdeu uma vida.", 2.4);
           }
         }
 
         function finish() {
           gameState = "won";
+          sfx.win();
           showOverlay(
             "CIDADE RENOVADA!",
-            "Você recuperou o parque e mostrou que pequenas atitudes ajudam a construir cidades mais sustentáveis. A ODS 11 começa com todos nós.",
+            `Você recuperou a cidade com ${score} pontos e mostrou como áreas verdes e ar limpo transformam comunidades (ODS 11).`,
             "JOGAR NOVAMENTE",
           );
         }
@@ -1030,21 +1330,30 @@
         }
 
         function drawProgress() {
-          const barW = Math.min(230, W * 0.32);
-          const x = W - barW - 22;
-          const y = 83;
+          const barW = Math.min(230, VW * 0.3);
+          const x = VW - barW - 22;
+          const y = 108;
+          const pct = clamp(collected / 8, 0, 1);
           rect(x, y, barW, 7, "#17352d35", 5);
-          rect(x, y, barW * (collected / 8), 7, "#8bbf50", 5);
+          rect(x, y, barW * pct, 7, "#8bbf50", 5);
           ctx.fillStyle = "#365c4b";
           ctx.font = "800 10px system-ui";
           ctx.textAlign = "right";
-          ctx.fillText("RESTAURAÇÃO", W - 22, y - 7);
+          ctx.fillText(
+            `RESTAURAÇÃO URBANA: ${Math.round(pct * 100)}%`,
+            VW - 22,
+            y - 7,
+          );
         }
 
         function render() {
           ctx.clearRect(0, 0, W, H);
           ctx.save();
           ctx.scale(scale, scale);
+          if (shakeTime > 0) {
+            const mag = shakeTime * 22;
+            ctx.translate(rand(-mag, mag), rand(-mag, mag));
+          }
           drawBackground();
           drawDecor();
           drawWorld();
@@ -1066,16 +1375,6 @@
           render();
           requestAnimationFrame(loop);
         }
-
-        // Ajusta a altura lógica do mundo ao tamanho disponível, mantendo a proporção do cenário.
-        const originalResize = resize;
-        function responsiveResize() {
-          originalResize();
-          scale = H / 720;
-          // O mundo usa coordenadas de 1200x720; em telas menores, o canvas é escalado.
-          ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-        }
-        addEventListener("resize", responsiveResize);
 
         buildLevel();
         requestAnimationFrame(loop);
