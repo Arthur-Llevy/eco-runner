@@ -1,17 +1,27 @@
 // Renderizador 2.5D: lê o estado do jogo (`g`, de game.js) e desenha em 3D com Three.js.
 // As regras e colisões continuam 2D; aqui só se traduz posição (x, y) -> (x, y, z).
 import {
-  THREE, U, mat, box, sphere,
+  THREE, U, mat, box, sphere, cyl,
   makePlayer, makeSeed, makeTrash, makeSmog, makeBin, makeVent, updateVent,
   makeDeadTree, makeGreenTree, makeLamp, makeChimney, makeFlag,
 } from "./models.js";
 import { ventState } from "../entities/hazard.js";
 import { lerpHex, clamp } from "../engine/math.js";
 
-const FOV = 40;
+// Ajustes pela URL, ex.: 3d.html?fov=60&lado=-7&altura=7&frente=1
+//   fov    perspectiva (maior = profundidade mais forte; padrão 52)
+//   lado   deslocamento lateral da câmera (negativo = olha de 3/4 pela esquerda; 0 = de frente)
+//   altura altura da câmera
+//   frente 1/0 liga ou desliga os objetos em primeiro plano
+const params = new URLSearchParams(location.search);
+const num = (k, d) => (params.has(k) && Number.isFinite(+params.get(k)) ? +params.get(k) : d);
+const FOV = num("fov", 46);
+const CAM_SIDE = num("lado", -3);
+const CAM_H = num("altura", 5.1);
+const FOREGROUND = num("frente", 1) !== 0;
 const VISIBLE_H = 15; // altura do mundo visível (o 2D mostrava ≈ 18)
 const MIN_VISIBLE_W = 24;
-const PLATFORM_DEPTH = 3.2;
+const PLATFORM_DEPTH = 4.6;
 
 export function createScene3D(canvas, wrap, g) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -20,7 +30,7 @@ export function createScene3D(canvas, wrap, g) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(FOV, 1.7, 0.5, 400);
-  scene.fog = new THREE.Fog("#e8e5c9", 45, 120);
+  scene.fog = new THREE.Fog("#e8e5c9", 22, 95);
 
   const hemi = new THREE.HemisphereLight("#cfd3c4", "#8c8468", 1.05);
   scene.add(hemi);
@@ -36,6 +46,7 @@ export function createScene3D(canvas, wrap, g) {
   const hillFar = new THREE.MeshBasicMaterial({ fog: false });
   const hillNear = new THREE.MeshLambertMaterial();
   const sunMat = new THREE.MeshBasicMaterial({ fog: false });
+  const bushMat = new THREE.MeshLambertMaterial();
   const cloudMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9, fog: false, depthWrite: false });
 
   let root = null;
@@ -86,6 +97,7 @@ export function createScene3D(canvas, wrap, g) {
     hillNear.color.set(lerpHex("#a8c4a5", "#6eb875", progress));
     sunMat.color.set(lerpHex("#f6e9a9", "#fff3a1", progress));
     cloudMat.color.set(lerpHex("#dce8d9", "#ffffff", progress));
+    bushMat.color.set(lerpHex("#6b6f55", "#4f9857", progress));
     // Luz: cinza e baixa na cidade poluída, quente e viva na cidade restaurada.
     hemi.color.set(lerpHex("#cfd3c4", "#fffbea", progress));
     hemi.groundColor.set(lerpHex("#8c8468", "#b9a97a", progress));
@@ -140,16 +152,15 @@ export function createScene3D(canvas, wrap, g) {
     dyn = { seeds: [], trash: [], hazards: [], cps: [], trees: [], chimneys: [], planted: new Map(), clouds: [], particles: [] };
 
     // Chão: terra + faixa de grama.
-    root.add(box("#786f5b", [W + 160, 8, 22.5], [W / 2 - 10, -4, -8.75]));
+    root.add(box("#786f5b", [W + 160, 8, 29], [W / 2 - 10, -4, -5.5]));
     // Calçada (pista do jogador, z ≈ -1.8..1.8) com meio-fio e faixas.
-    root.add(box("#b9b393", [W + 160, 0.14, 3.8], [W / 2 - 10, 0.02, 0.0]));
-    root.add(box("#8e8a72", [W + 160, 0.2, 0.2], [W / 2 - 10, 0.04, 1.95]));
-    root.add(box("#8e8a72", [W + 160, 0.2, 0.2], [W / 2 - 10, 0.04, -1.95]));
+    root.add(box("#b9b393", [W + 160, 0.14, 4.6], [W / 2 - 10, 0.02, 0.0]));
+    root.add(box("#8e8a72", [W + 160, 0.2, 0.2], [W / 2 - 10, 0.04, 2.35]));
+    root.add(box("#8e8a72", [W + 160, 0.2, 0.2], [W / 2 - 10, 0.04, -2.35]));
     for (let x = -4; x < W + 20; x += 2.4) root.add(box("#9d9879", [1.2, 0.03, 0.12], [x, 0.1, 0.0]));
     const grass = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), grassMat);
-    grass.scale.set(W + 160, 0.3, 22.5);
-    grass.position.set(W / 2 - 10, -0.1, -8.75);
-    grass.scale.z = 22.5;
+    grass.scale.set(W + 160, 0.3, 29);
+    grass.position.set(W / 2 - 10, -0.1, -5.5);
     grass.receiveShadow = true;
     root.add(grass);
 
@@ -174,6 +185,28 @@ export function createScene3D(canvas, wrap, g) {
     }
 
     buildings(root, g.decor);
+
+    // Primeiro plano: arbustos e postes entre a câmera e o jogador criam paralaxe.
+    if (FOREGROUND) {
+      let seed = 7;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      for (let x = -6; x < W + 20; x += 4 + rnd() * 5) {
+        const s = 0.3 + rnd() * 0.35;
+        const b = new THREE.Group();
+        b.add(sphere("#6b6f55", s, [0, s * 0.7, 0], {}));
+        b.add(sphere("#7d8264", s * 0.7, [s * 0.8, s * 0.5, 0.2], {}));
+        b.position.set(x, 0, 6 + rnd() * 2.5);
+        b.traverse((o) => o.isMesh && (o.material = bushMat));
+        root.add(b);
+      }
+      for (let x = 8; x < W + 20; x += 30 + rnd() * 12) {
+        const pole = new THREE.Group();
+        pole.add(cyl("#4a3f33", 0.09, 9, [0, 4.5, 0]));
+        pole.add(box("#4a3f33", [1.6, 0.12, 0.12], [0, 8.2, 0]));
+        pole.position.set(x, 0, 9.5);
+        root.add(pole);
+      }
+    }
 
     for (const d of g.decor) {
       if (d.type === "deadTree") {
@@ -366,8 +399,8 @@ export function createScene3D(canvas, wrap, g) {
 
     // Névoa piora com o ar poluído.
     const air = g.air ?? 100;
-    scene.fog.far = 70 + clamp(air, 0, 100) * 0.55;
-    scene.fog.near = 25 + clamp(air, 0, 100) * 0.2;
+    scene.fog.far = 60 + clamp(air, 0, 100) * 0.4;
+    scene.fog.near = 14 + clamp(air, 0, 100) * 0.12;
 
     // Câmera lateral que segue o jogador.
     const px = X(p.x + p.w / 2);
@@ -375,8 +408,8 @@ export function createScene3D(canvas, wrap, g) {
     const maxX = Math.max(X(L.width) / 2, X(L.width) - 11);
     camX += (clamp(px + 2.6, minX, maxX) - camX) * 0.12;
     const shake = g.shake > 0 ? g.shake * 0.8 : 0;
-    camera.position.set(camX + (Math.random() - 0.5) * shake, 4.6 + (Math.random() - 0.5) * shake, camDist);
-    camera.lookAt(camX, 4.3, 0);
+    camera.position.set(camX + CAM_SIDE + (Math.random() - 0.5) * shake, CAM_H + (Math.random() - 0.5) * shake, camDist);
+    camera.lookAt(camX, 4.0, 0);
     dyn.sun.position.set(camX + 11, 12, -75);
 
     sun.position.set(px + 12, 24, 14);
