@@ -11,6 +11,8 @@ python3 -m http.server 8000
 # abra http://localhost:8000
 ```
 
+Para abrir uma fase direto: `http://localhost:8000/?fase=fase-2`.
+
 ## Estrutura
 
 ```
@@ -35,4 +37,6 @@ Copie `src/levels/fase-1.json` e adicione o id em `LEVELS` (`src/levels/loader.j
 - `seeds`: pares `[x, y]`. A meta da fase é o total de sementes (ou `seedGoal`, se informado)
 - `hazards`: `{ x, type }` com `type` = `smog` ou `bin` (`y` opcional)
 - `trash`: `{ x, y, type }` com `type` = `paper` (azul), `plastic` (vermelho), `metal` (amarelo) ou `glass` (verde)
+- `flood` (fase de enchente): `{ alertSeconds, baseRise, clogRise, maxHeight, slowdown, drownTime, residentGrace }`, com `drains` (`{ x }`), `debris` (`{ x, y? }`), `residents` (`{ x, y? }`), `rescueGoal` e `safeZone` (`{ x, y, w }`). Bueiro com lixo a menos de 80 px fica entupido e soma `clogRise` px/s à subida da água
+- `next`: id da fase seguinte; `intro`: texto do menu
 - `checkpoints`: posições x; ao passar por uma, o jogador renasce ali ao perder vida

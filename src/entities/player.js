@@ -15,6 +15,8 @@ export function resetPlayer(p, x, ground) {
   p.vx = 0;
   p.vy = 0;
   p.inv = 0;
+  p.speedMul = 1;
+  p.waterMul = 1;
 }
 
 // Movimento horizontal, gravidade, plataformas de "mão única" e pulo.

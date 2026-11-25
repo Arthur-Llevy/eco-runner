@@ -1,5 +1,5 @@
 // Carrega fases descritas em JSON (ver fase-1.json).
-export const LEVELS = ["fase-1"];
+export const LEVELS = ["fase-1", "fase-2"];
 
 export async function loadLevel(id) {
   const url = new URL(`./${id}.json`, import.meta.url);
