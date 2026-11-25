@@ -20,7 +20,8 @@ export function resetPlayer(p, x, ground) {
 // Movimento horizontal, gravidade, plataformas de "mão única" e pulo.
 export function updatePlayer(p, dt, input, level) {
   const prevBottom = p.y + p.h;
-  p.vx = (input.right ? SPEED : 0) - (input.left ? SPEED : 0);
+  const speed = SPEED * (p.speedMul ?? 1);
+  p.vx = (input.right ? speed : 0) - (input.left ? speed : 0);
   if (p.vx !== 0) p.face = Math.sign(p.vx);
   p.x = clamp(p.x + p.vx * dt, 0, level.width - p.w);
 

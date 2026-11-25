@@ -34,4 +34,5 @@ Copie `src/levels/fase-1.json` e adicione o id em `LEVELS` (`src/levels/loader.j
 - `platforms`: `{ x, y, w, h, type }` com `type` = `roof` ou `step`
 - `seeds`: pares `[x, y]`. A meta da fase é o total de sementes (ou `seedGoal`, se informado)
 - `hazards`: `{ x, type }` com `type` = `smog` ou `bin` (`y` opcional)
+- `trash`: `{ x, y, type }` com `type` = `paper` (azul), `plastic` (vermelho), `metal` (amarelo) ou `glass` (verde)
 - `checkpoints`: posições x; ao passar por uma, o jogador renasce ali ao perder vida

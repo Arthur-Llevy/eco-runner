@@ -99,6 +99,24 @@ export function drawDecor(ctx, { camera, viewW, level, decor }) {
   }
 }
 
+// Árvores plantadas ao coletar sementes: crescem em ~1,5 s.
+export function drawPlanted(ctx, trees, { camera, viewW, level }) {
+  const ground = level.ground;
+  for (const t of trees) {
+    const x = t.x - camera;
+    if (x < -60 || x > viewW + 60) continue;
+    const s = Math.min(1, 0.25 + t.age / 1.5 * 0.75);
+    ctx.save();
+    ctx.translate(x, ground - 5);
+    ctx.scale(s, s);
+    rect(ctx, -5, -62, 10, 62, "#795a3e", 4);
+    circle(ctx, 0, -78, 24, "#64a95c");
+    circle(ctx, -14, -66, 16, "#83bd69");
+    circle(ctx, 16, -64, 17, "#4f9857");
+    ctx.restore();
+  }
+}
+
 // Chão em blocos com uma faixa de grama seca.
 export function drawGround(ctx, { camera, viewW, level }) {
   const g = level.ground;
