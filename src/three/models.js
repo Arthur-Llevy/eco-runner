@@ -4,6 +4,7 @@ import * as THREE from "../../vendor/three.module.js";
 
 export { THREE };
 export const U = 40;
+export const PLAYER_SCALE = 1.45; // só visual: a colisão continua a do jogo 2D
 
 const G = {
   box: new THREE.BoxGeometry(1, 1, 1),
@@ -39,10 +40,11 @@ const ghostSphere = (color, opacity, r, pos) => mesh(G.sphere, ghost(color, opac
 export function makePlayer() {
   const root = new THREE.Group();
   const body = new THREE.Group(); // gira para olhar para a direita/esquerda
+  body.scale.setScalar(PLAYER_SCALE);
   root.add(body);
 
-  body.add(box("#3f9668", [0.62, 0.5, 0.42], [0, 0.6, 0]));
-  body.add(box("#d5f06d", [0.66, 0.12, 0.46], [0, 0.88, 0])); // lenço
+  body.add(box("#3f9668", [0.62, 0.5, 0.42], [0, 0.6, 0], { emissive: "#1d5a3a", emissiveIntensity: 0.35 }));
+  body.add(box("#d5f06d", [0.66, 0.12, 0.46], [0, 0.88, 0], { emissive: "#8aa020", emissiveIntensity: 0.5 })); // lenço
   body.add(box("#d18c4c", [0.22, 0.44, 0.34], [-0.4, 0.62, 0])); // mochila
   body.add(sphere("#e8bd91", 0.27, [0, 1.04, 0])); // cabeça
   body.add(sphere("#394b3e", [0.29, 0.2, 0.29], [-0.03, 1.15, 0])); // cabelo

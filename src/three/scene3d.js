@@ -9,8 +9,8 @@ import { ventState } from "../entities/hazard.js";
 import { lerpHex, clamp } from "../engine/math.js";
 
 const FOV = 40;
-const VISIBLE_H = 17.5; // altura do mundo visível (≈ 700 px do 2D)
-const MIN_VISIBLE_W = 26;
+const VISIBLE_H = 15; // altura do mundo visível (o 2D mostrava ≈ 18)
+const MIN_VISIBLE_W = 24;
 const PLATFORM_DEPTH = 3.2;
 
 export function createScene3D(canvas, wrap, g) {
@@ -22,8 +22,9 @@ export function createScene3D(canvas, wrap, g) {
   const camera = new THREE.PerspectiveCamera(FOV, 1.7, 0.5, 400);
   scene.fog = new THREE.Fog("#e8e5c9", 45, 120);
 
-  scene.add(new THREE.HemisphereLight("#f0f6fa", "#a39878", 1.35));
-  const sun = new THREE.DirectionalLight("#fff4d6", 0.85);
+  const hemi = new THREE.HemisphereLight("#cfd3c4", "#8c8468", 1.05);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight("#e6dcc0", 0.6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 18, bottom: -10, near: 1, far: 90 });
@@ -85,6 +86,12 @@ export function createScene3D(canvas, wrap, g) {
     hillNear.color.set(lerpHex("#a8c4a5", "#6eb875", progress));
     sunMat.color.set(lerpHex("#f6e9a9", "#fff3a1", progress));
     cloudMat.color.set(lerpHex("#dce8d9", "#ffffff", progress));
+    // Luz: cinza e baixa na cidade poluída, quente e viva na cidade restaurada.
+    hemi.color.set(lerpHex("#cfd3c4", "#fffbea", progress));
+    hemi.groundColor.set(lerpHex("#8c8468", "#b9a97a", progress));
+    hemi.intensity = 1.05 + 0.5 * progress;
+    sun.color.set(lerpHex("#e6dcc0", "#fff0c2", progress));
+    sun.intensity = 0.6 + 0.6 * progress;
   }
 
   function hills(width, z, material, base, amp, seed) {
@@ -107,7 +114,7 @@ export function createScene3D(canvas, wrap, g) {
     decor.forEach((d, i) => {
       if (d.type !== "building") return;
       const w = d.bw / U;
-      const h = (d.bh * 0.8) / U;
+      const h = (d.bh * 0.58) / U;
       const z = -7 - (i % 3) * 3.2;
       const b = box(["#879c96", "#91a49c", "#7e928c"][d.tint], [w, h, 2.8], [X(d.x) + w / 2, h / 2, z]);
       parent.add(b);
@@ -134,9 +141,15 @@ export function createScene3D(canvas, wrap, g) {
 
     // Chão: terra + faixa de grama.
     root.add(box("#786f5b", [W + 160, 8, 22.5], [W / 2 - 10, -4, -8.75]));
+    // Calçada (pista do jogador, z ≈ -1.8..1.8) com meio-fio e faixas.
+    root.add(box("#b9b393", [W + 160, 0.14, 3.8], [W / 2 - 10, 0.02, 0.0]));
+    root.add(box("#8e8a72", [W + 160, 0.2, 0.2], [W / 2 - 10, 0.04, 1.95]));
+    root.add(box("#8e8a72", [W + 160, 0.2, 0.2], [W / 2 - 10, 0.04, -1.95]));
+    for (let x = -4; x < W + 20; x += 2.4) root.add(box("#9d9879", [1.2, 0.03, 0.12], [x, 0.1, 0.0]));
     const grass = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), grassMat);
     grass.scale.set(W + 160, 0.3, 22.5);
     grass.position.set(W / 2 - 10, -0.1, -8.75);
+    grass.scale.z = 22.5;
     grass.receiveShadow = true;
     root.add(grass);
 
@@ -358,12 +371,12 @@ export function createScene3D(canvas, wrap, g) {
 
     // Câmera lateral que segue o jogador.
     const px = X(p.x + p.w / 2);
-    const minX = Math.min(X(L.width) / 2, 13);
-    const maxX = Math.max(X(L.width) / 2, X(L.width) - 13);
-    camX += (clamp(px + 3.2, minX, maxX) - camX) * 0.12;
+    const minX = Math.min(X(L.width) / 2, 11);
+    const maxX = Math.max(X(L.width) / 2, X(L.width) - 11);
+    camX += (clamp(px + 2.6, minX, maxX) - camX) * 0.12;
     const shake = g.shake > 0 ? g.shake * 0.8 : 0;
-    camera.position.set(camX + (Math.random() - 0.5) * shake, 5.6 + (Math.random() - 0.5) * shake, camDist);
-    camera.lookAt(camX, 5.2, 0);
+    camera.position.set(camX + (Math.random() - 0.5) * shake, 4.6 + (Math.random() - 0.5) * shake, camDist);
+    camera.lookAt(camX, 4.3, 0);
     dyn.sun.position.set(camX + 11, 12, -75);
 
     sun.position.set(px + 12, 24, 14);
@@ -373,6 +386,6 @@ export function createScene3D(canvas, wrap, g) {
   }
 
   build();
-  camX = X(g.player.x) + 3.2;
+  camX = X(g.player.x) + 2.6;
   return { render, renderer, scene, camera };
 }
