@@ -1,4 +1,5 @@
 import { clamp } from "../engine/math.js";
+import { sfx } from "../engine/audio.js";
 import { rect, circle } from "../render/draw.js";
 
 const SPEED = 245;
@@ -50,6 +51,7 @@ export function updatePlayer(p, dt, input, level) {
   if (input.consumeJump() && p.onGround) {
     p.vy = JUMP_VELOCITY;
     p.onGround = false;
+    sfx.jump();
   }
 
   if (Math.abs(p.vx) > 0 && p.onGround) p.walk += dt * 13;

@@ -1,6 +1,7 @@
 // Regras da fase de enchente (ODS 11.5): alerta, água subindo, bueiros entupidos
 // por lixo e resgate de moradores até um ponto alto.
 import { burst } from "./entities/particles.js";
+import { sfx } from "./engine/audio.js";
 import { createDebris, touchesDebris, drawDebris } from "./entities/debris.js";
 import { createDrain, drawDrain } from "./entities/drain.js";
 import { createResident, drawResident } from "./entities/resident.js";
@@ -64,6 +65,7 @@ export function updateFlood(g, dt, hooks) {
     d.got = true;
     g.score += DEBRIS_SCORE;
     burst(g.particles, d.x, d.y, d.color, 6);
+    sfx.seed();
     updateHUD(g);
   }
   for (const dr of g.drains) {
@@ -141,6 +143,7 @@ export function updateFlood(g, dt, hooks) {
       burst(g.particles, r.x + r.w / 2, r.y, "#7fd0ff", 10);
     }
     updateHUD(g);
+    sfx.win();
     say(`🏠 Morador a salvo! ${g.rescued}/${g.rescueGoal}`);
   }
 
@@ -186,7 +189,7 @@ export function drawFloodHud(ctx, viewW, g) {
   if (!f) return;
   const barW = Math.min(230, viewW * 0.32);
   const x = viewW - barW - 22;
-  const y = 83;
+  const y = 90;
   rect(ctx, x, y, barW, 7, "#17352d35", 5);
   rect(ctx, x, y, barW * (f.h / f.cfg.maxHeight), 7, "#3f8fc4", 5);
   ctx.fillStyle = "#365c4b";
