@@ -35,7 +35,7 @@ Copie `src/levels/fase-1.json` e adicione o id em `LEVELS` (`src/levels/loader.j
 - `width`, `ground`, `spawnX`, `finishOffset`, `gardenStartX`
 - `platforms`: `{ x, y, w, h, type }` com `type` = `roof` ou `step`
 - `seeds`: pares `[x, y]`. A meta da fase é o total de sementes (ou `seedGoal`, se informado)
-- `hazards`: `{ x, type }` com `type` = `smog` ou `bin` (`y` opcional)
+- `hazards`: `{ x, type }` com `type` = `smog`, `bin` ou `vent` (tubo de vapor que sai do chão em ciclo de 4,2 s e causa dano; `phase` desloca o ciclo; `y` opcional)
 - `trash`: `{ x, y, type }` com `type` = `paper` (azul), `plastic` (vermelho), `metal` (amarelo) ou `glass` (verde)
 - `flood` (fase de enchente): `{ alertSeconds, baseRise, clogRise, maxHeight, slowdown, drownTime, residentGrace }`, com `drains` (`{ x }`), `debris` (`{ x, y? }`), `residents` (`{ x, y? }`), `rescueGoal` e `safeZone` (`{ x, y, w }`). Bueiro com lixo a menos de 80 px fica entupido e soma `clogRise` px/s à subida da água
 - `next`: id da fase seguinte; `intro`: texto do menu
