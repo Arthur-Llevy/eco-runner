@@ -1,0 +1,34 @@
+{
+  "id": "fase-2",
+  "name": "Bairro ribeirinho",
+  "intro": "A Defesa Civil emitiu um alerta de enchente. Recolha o lixo que entope os bueiros, leve os moradores até o ponto alto e salve o bairro antes que a água suba.",
+  "width": 2600,
+  "ground": 585,
+  "spawnX": 90,
+  "finishOffset": 115,
+  "gardenStartX": 99999,
+  "platforms": [
+    { "x": 330, "y": 495, "w": 150, "h": 18, "type": "roof" },
+    { "x": 1020, "y": 495, "w": 150, "h": 18, "type": "roof" },
+    { "x": 1560, "y": 495, "w": 150, "h": 18, "type": "roof" },
+    { "x": 1950, "y": 505, "w": 120, "h": 18, "type": "step" },
+    { "x": 2070, "y": 420, "w": 110, "h": 18, "type": "step" },
+    { "x": 2185, "y": 335, "w": 110, "h": 18, "type": "step" },
+    { "x": 2330, "y": 245, "w": 240, "h": 22, "type": "roof" }
+  ],
+  "seeds": [],
+  "hazards": [],
+  "checkpoints": [1100, 1850],
+  "flood": { "alertSeconds": 15, "baseRise": 5, "clogRise": 3, "maxHeight": 300, "slowdown": 0.65, "drownTime": 1.5, "residentGrace": 2.5 },
+  "drains": [{ "x": 520 }, { "x": 900 }, { "x": 1350 }, { "x": 1780 }],
+  "debris": [
+    { "x": 490 }, { "x": 552 },
+    { "x": 870 }, { "x": 930 },
+    { "x": 1320 }, { "x": 1385 },
+    { "x": 1750 }, { "x": 1815 },
+    { "x": 400, "y": 481 }
+  ],
+  "residents": [{ "x": 700 }, { "x": 1100, "y": 495 }, { "x": 1500 }, { "x": 1650, "y": 495 }],
+  "rescueGoal": 3,
+  "safeZone": { "x": 2330, "y": 245, "w": 240 }
+}

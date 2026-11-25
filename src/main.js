@@ -10,7 +10,8 @@ const view = createViewport(document.getElementById("game"), document.getElement
 let game = null;
 const input = createInput({ onStart: () => game?.start() });
 
-game = createGame(view, input, await loadLevel(LEVELS[0]));
+const requested = new URLSearchParams(location.search).get("fase");
+game = createGame(view, input, await loadLevel(LEVELS.includes(requested) ? requested : LEVELS[0]));
 onAction(() => game.start());
 startLoop(game.update, game.render);
 

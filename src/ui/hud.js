@@ -2,11 +2,15 @@ import { rect } from "../render/draw.js";
 
 const $ = (id) => document.getElementById(id);
 
-export function updateHUD({ collected, seedGoal, lives, score }) {
-  $("seeds").textContent = `${collected} / ${seedGoal}`;
-  $("lives").textContent = lives;
-  $("score").textContent = String(score).padStart(3, "0");
-  $("goal-tip").textContent = `${seedGoal} SEMENTES`;
+export function updateHUD(g) {
+  const flood = Boolean(g.flood);
+  $("seed-stat").hidden = flood;
+  $("res-stat").hidden = !flood;
+  $("seeds").textContent = `${g.collected} / ${g.seedGoal}`;
+  $("rescued").textContent = `${g.rescued} / ${g.rescueGoal}`;
+  $("lives").textContent = g.lives;
+  $("score").textContent = String(g.score).padStart(3, "0");
+  $("goal-tip").textContent = flood ? `${g.rescueGoal} MORADORES` : `${g.seedGoal} SEMENTES`;
 }
 
 // Barra de restauração desenhada no canvas.

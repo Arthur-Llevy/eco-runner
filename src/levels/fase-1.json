@@ -1,6 +1,7 @@
 {
   "id": "fase-1",
   "name": "Centro cinzento",
+  "next": "fase-2",
   "width": 3300,
   "ground": 585,
   "spawnX": 90,
