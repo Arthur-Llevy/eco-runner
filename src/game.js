@@ -1,4 +1,6 @@
-import { clamp } from "./engine/math.js";
+import { clamp, rand } from "./engine/math.js";
+import { sfx } from "./engine/audio.js";
+import { odsMessage } from "./ui/ods.js";
 import { createPlayer, resetPlayer, updatePlayer, drawPlayer } from "./entities/player.js";
 import { createSeed, touchesSeed, drawSeed } from "./entities/seed.js";
 import { createHazard, touchesHazard, drawHazard } from "./entities/hazard.js";
@@ -14,6 +16,7 @@ import { showOverlay, hideOverlay } from "./ui/overlay.js";
 const START_LIVES = 3;
 const KNOCKBACK = 170;
 const INVULNERABLE_TIME = 1.5;
+const SHAKE_TIME = 0.25;
 
 // Estado de uma partida e regras do jogo, a partir dos dados de uma fase.
 export function createGame(view, input, levelData) {
@@ -34,6 +37,8 @@ export function createGame(view, input, levelData) {
     lives: START_LIVES,
     score: 0,
     finishHintCooldown: 0,
+    shake: 0,
+    deadTrees: 0,
   };
 
   // Largura visível em coordenadas do mundo (o canvas é escalado por view.scale).
@@ -46,6 +51,8 @@ export function createGame(view, input, levelData) {
     g.seeds = L.seeds.map(createSeed);
     g.hazards = L.hazards.map((h) => createHazard(h, L.ground));
     g.decor = generateDecor(L);
+    g.deadTrees = g.decor.filter((d) => d.type === "deadTree").length;
+    g.shake = 0;
     g.particles = [];
     g.checkpoints = (L.checkpoints ?? []).map((x) => ({ x, reached: false }));
     g.checkpoint = L.spawnX;
@@ -56,6 +63,14 @@ export function createGame(view, input, levelData) {
     g.camera = 0;
     resetPlayer(g.player, L.spawnX, L.ground);
     updateHUD(g);
+  }
+
+  // Reinicia a fase (botão ↻), mesmo no meio da partida.
+  function restart() {
+    build();
+    g.state = "playing";
+    hideOverlay();
+    say("Encontre as sementes e ajude a cidade!");
   }
 
   function start() {
@@ -70,6 +85,8 @@ export function createGame(view, input, levelData) {
     const p = g.player;
     if (p.inv > 0) return;
     g.lives--;
+    g.shake = SHAKE_TIME;
+    sfx.hit();
     updateHUD(g);
     if (g.lives <= 0) {
       g.state = "over";
@@ -89,6 +106,7 @@ export function createGame(view, input, levelData) {
 
   function finish() {
     g.state = "won";
+    sfx.win();
     showOverlay(
       ["CIDADE", "RENOVADA!"],
       "Você recuperou o parque e mostrou que pequenas atitudes ajudam a construir cidades mais sustentáveis. A ODS 11 começa com todos nós.",
@@ -100,6 +118,7 @@ export function createGame(view, input, levelData) {
     if (g.state !== "playing") return;
     const p = g.player;
     const L = g.level;
+    g.shake = Math.max(0, g.shake - dt);
     updatePlayer(p, dt, input, L);
 
     for (const s of g.seeds) {
@@ -109,11 +128,8 @@ export function createGame(view, input, levelData) {
       g.score += 100;
       updateHUD(g);
       burst(g.particles, s.x, s.y);
-      say(
-        g.collected === g.seedGoal
-          ? "🌳 Todas as sementes! Corra até a bandeira."
-          : "+100 pontos · Semente coletada!",
-      );
+      sfx.seed();
+      say(odsMessage(g.collected, g.seedGoal), 3.6);
     }
 
     if (p.inv <= 0 && g.hazards.some((h) => touchesHazard(h, p))) hit();
@@ -148,7 +164,21 @@ export function createGame(view, input, levelData) {
     ctx.clearRect(0, 0, view.W, view.H);
     ctx.save();
     ctx.scale(view.scale, view.scale);
-    const scene = { camera: g.camera, viewW: viewW(), viewH: viewH(), level: g.level, decor: g.decor };
+    if (g.shake > 0) {
+      const mag = g.shake * 22;
+      ctx.translate(rand(-mag, mag), rand(-mag, mag));
+    }
+    const progress = g.seedGoal ? clamp(g.collected / g.seedGoal, 0, 1) : 0;
+    const scene = {
+      camera: g.camera,
+      viewW: viewW(),
+      viewH: viewH(),
+      level: g.level,
+      decor: g.decor,
+      progress,
+      restoredTrees: Math.floor(g.deadTrees * progress),
+      goalMet: g.collected >= g.seedGoal,
+    };
     drawBackground(ctx, scene);
     drawDecor(ctx, scene);
     drawGround(ctx, scene);
@@ -164,5 +194,5 @@ export function createGame(view, input, levelData) {
   }
 
   build();
-  return { start, update, render, state: g };
+  return { start, restart, update, render, state: g };
 }

@@ -13,11 +13,11 @@ export function updateHUD({ collected, seedGoal, lives, score }) {
 export function drawProgress(ctx, viewW, collected, seedGoal) {
   const barW = Math.min(230, viewW * 0.32);
   const x = viewW - barW - 22;
-  const y = 83;
+  const y = 108;
   rect(ctx, x, y, barW, 7, "#17352d35", 5);
   rect(ctx, x, y, barW * Math.min(1, collected / seedGoal), 7, "#8bbf50", 5);
   ctx.fillStyle = "#365c4b";
   ctx.font = "800 10px system-ui";
   ctx.textAlign = "right";
-  ctx.fillText("RESTAURAÇÃO", viewW - 22, y - 7);
+  ctx.fillText(`RESTAURAÇÃO URBANA: ${Math.round(Math.min(1, collected / seedGoal) * 100)}%`, viewW - 22, y - 7);
 }

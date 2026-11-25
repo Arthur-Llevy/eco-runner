@@ -1,10 +1,30 @@
 import { rect, circle, cloud } from "../render/draw.js";
 
+// Fumaça translúcida em camadas suaves, sem contorno.
+function drawSmoke(ctx, cx, cy, t, phase) {
+  const drift = Math.sin(t * 2.2 + phase) * 5;
+  const pulse = 1 + Math.sin(t * 3.1 + phase) * 0.06;
+  ctx.save();
+  ctx.globalAlpha = 0.34;
+  cloud(ctx, cx - 22 + drift * 0.6, cy + 2, 0.78 * pulse, "#3b4744");
+  ctx.globalAlpha = 0.66;
+  cloud(ctx, cx - 17 + drift, cy, 0.62 * pulse, "#293330");
+  ctx.globalAlpha = 0.52;
+  circle(ctx, cx - 4 + drift * 1.2, cy - 3, 13 * pulse, "#1f2725");
+  circle(ctx, cx + 10 + drift * 0.9, cy + 1, 11 * pulse, "#1f2725");
+  for (let i = 0; i < 3; i++) {
+    const k = (t * 0.85 + phase + i * 0.33) % 1;
+    ctx.globalAlpha = (1 - k) * 0.55;
+    circle(ctx, cx - 10 + i * 10 + Math.sin(t * 4 + i) * 4, cy - 10 - k * 28, 5.5 - k * 2.5, "#36423f");
+  }
+  ctx.restore();
+}
+
 // Tamanho e altura acima do chão de cada tipo de perigo.
 // O tubo de vapor (vent) tem hitbox dinâmica: `h` é a altura máxima do jato.
 const TYPES = {
-  smog: { w: 42, h: 38, lift: 22 },
-  bin: { w: 34, h: 35, lift: 20 },
+  smog: { w: 46, h: 28, lift: 38 },
+  bin: { w: 32, h: 35, lift: 18 },
   vent: { w: 26, h: 148, lift: 0 },
 };
 
@@ -110,14 +130,12 @@ export function drawHazard(ctx, h, camera, viewW) {
   if (h.type === "vent") {
     drawVent(ctx, h, x);
   } else if (h.type === "bin") {
-    rect(ctx, x - h.w / 2, h.y - h.h / 2, h.w, h.h, "#477f70", 5);
-    rect(ctx, x - h.w / 2 - 3, h.y - h.h / 2 - 5, h.w + 6, 8, "#315f53", 3);
-    rect(ctx, x - 7, h.y - 4, 14, 4, "#c3dfad", 2);
-    rect(ctx, x - 4, h.y + 5, 8, 8, "#c3dfad", 2);
+    rect(ctx, x - h.w / 2, h.y - h.h / 2, h.w, h.h, "#c45d3b", 5);
+    rect(ctx, x - h.w / 2 - 3, h.y - h.h / 2 - 5, h.w + 6, 8, "#943e23", 3);
+    rect(ctx, x - 7, h.y - 4, 14, 4, "#fde68a", 2);
+    rect(ctx, x - 4, h.y + 5, 8, 8, "#fde68a", 2);
   } else {
-    const bob = Math.sin(performance.now() * 0.002 + h.phase) * 4;
-    cloud(ctx, x, h.y + bob, 0.72, "#82988c");
-    circle(ctx, x - 12, h.y - 4 + bob, 4, "#a8b8a9");
-    circle(ctx, x + 15, h.y + 6 + bob, 3, "#a8b8a9");
+    const now = performance.now() / 1000;
+    drawSmoke(ctx, x, h.y + Math.sin(now * 2.4 + h.phase) * 5, now, h.phase);
   }
 }

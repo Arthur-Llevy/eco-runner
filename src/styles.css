@@ -95,6 +95,35 @@ canvas {
   white-space: nowrap;
 }
 
+.stats {
+  align-items: center;
+  pointer-events: auto;
+}
+
+.hud-btn {
+  border: 1px solid #c9d6b8;
+  background: #e6edda;
+  color: #17352d;
+  border-radius: 10px;
+  padding: 5px 9px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.hud-btn:hover {
+  background: #d7e5c3;
+  transform: none;
+  box-shadow: none;
+}
+
+.hud-btn:active {
+  transform: scale(0.95);
+  box-shadow: none;
+}
+
 .stat b {
   font-variant-numeric: tabular-nums;
 }
@@ -105,7 +134,8 @@ canvas {
   left: 50%;
   transform: translate(-50%, -8px);
   opacity: 0;
-  padding: 10px 17px;
+  max-width: min(560px, 90vw);
+  padding: 10px 18px;
   border-radius: 999px;
   background: #17352ded;
   color: white;
