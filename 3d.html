@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>[3D protótipo] Eco Runner — Uma cidade melhor começa com você</title>
+
+    <link rel="stylesheet" href="src/styles.css" />
+    <script type="module" src="src/main3d.js"></script>
+    <style>
+      #game3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      #game { position: absolute; inset: 0; pointer-events: none; }
+    </style>
+  </head>
+
+  <body>
+    <div id="game-wrap">
+      <canvas id="game3d"></canvas>
+      <canvas id="game" aria-label="Jogo de plataforma Eco Runner"></canvas>
+
+      <div class="topbar">
+        <div class="brand">
+          <strong
+            >ECO RUNNER <span style="color: #a2c94f">●</span> ODS 11</strong
+          >
+          <span>Uma cidade melhor começa com você</span>
+        </div>
+        <div class="stats">
+          <div class="stat" id="seed-stat">🌱 <b id="seeds">0 / 0</b></div>
+          <div class="stat" id="res-stat" hidden>🏠 <b id="rescued">0 / 0</b></div>
+          <div class="stat">♥ <b id="lives">3</b></div>
+          <div class="stat">★ <b id="score">000</b></div>
+          <button class="hud-btn" id="btn-mute" title="Ativar ou silenciar som" aria-label="Alternar som">🔊</button>
+          <button class="hud-btn" id="btn-restart" title="Reiniciar fase" aria-label="Reiniciar fase">↻</button>
+        </div>
+      </div>
+
+      <div id="toast"></div>
+
+      <div id="alert" role="alert"><b></b><span></span></div>
+
+      <div id="overlay">
+        <div class="modal">
+          <div class="eyebrow">UMA AVENTURA PELA ODS 11</div>
+          <h1>ECO<br /><em>RUNNER.</em></h1>
+          <p>
+            A cidade perdeu suas áreas verdes. Corra pelos telhados e parques,
+            desvie da poluição e recolha sementes para trazer a natureza de
+            volta.
+          </p>
+          <div class="tips">
+            <span>← → MOVER</span>
+            <span>ESPAÇO PULAR</span>
+            <span id="goal-tip">SEMENTES</span>
+          </div>
+          <button id="action">COMEÇAR A JOGAR&nbsp; →</button>
+          <div class="footnote">
+            Jogo 2D • Feito em HTML, CSS e JavaScript Canvas
+          </div>
+        </div>
+      </div>
+
+      <div id="mobile-controls">
+        <div class="pad">
+          <button data-key="left">←</button>
+          <button data-key="right">→</button>
+        </div>
+        <div class="pad">
+          <button data-key="jump">↑</button>
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>
