@@ -1,0 +1,292 @@
+:root {
+  --ink: #17352d;
+  --green: #2f7654;
+  --lime: #c9f36a;
+  --cream: #f6f4e9;
+  --muted: #668076;
+  --line: rgba(23, 53, 45, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #d8e9d9;
+  font-family:
+    ui-rounded,
+    "Trebuchet MS",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  color: var(--ink);
+}
+
+body {
+  display: grid;
+  place-items: center;
+}
+
+#game-wrap {
+  position: relative;
+  width: min(1200px, 100vw);
+  height: min(720px, 100vh);
+  overflow: hidden;
+  background: #b8d9d0;
+  box-shadow: 0 24px 90px #17352d35;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: auto;
+}
+
+.topbar {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.brand,
+.stats {
+  background: #fffdf0ef;
+  border: 1px solid #ffffffb8;
+  box-shadow: 0 8px 25px #17352d18;
+  border-radius: 16px;
+  padding: 11px 15px;
+}
+
+.brand strong {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: #367858;
+}
+
+.brand span {
+  font-size: 11px;
+  color: #6a8278;
+}
+
+.stats {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.stat b {
+  font-variant-numeric: tabular-nums;
+}
+
+#toast {
+  position: absolute;
+  top: 94px;
+  left: 50%;
+  transform: translate(-50%, -8px);
+  opacity: 0;
+  padding: 10px 17px;
+  border-radius: 999px;
+  background: #17352ded;
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 8px 22px #17352d25;
+  transition: 0.2s;
+  pointer-events: none;
+  text-align: center;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: linear-gradient(120deg, #163b35d9, #17352d9c);
+}
+
+.modal {
+  width: min(510px, 100%);
+  padding: 32px;
+  border-radius: 26px;
+  background: var(--cream);
+  box-shadow: 0 24px 80px #0c211c66;
+  border: 1px solid #ffffff;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: 0.18em;
+  color: #4d8b61;
+}
+
+h1 {
+  font-size: clamp(38px, 7vw, 62px);
+  line-height: 0.94;
+  letter-spacing: -0.055em;
+  margin: 12px 0;
+  color: #17352d;
+}
+
+h1 em {
+  font-style: normal;
+  color: #5a9b54;
+}
+
+.modal p {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #557168;
+  margin: 16px 0 22px;
+}
+
+.tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 23px;
+}
+
+.tips span {
+  font-size: 11px;
+  font-weight: 800;
+  background: #e6edda;
+  color: #41674d;
+  padding: 8px 10px;
+  border-radius: 9px;
+}
+
+button {
+  border: 0;
+  border-radius: 13px;
+  padding: 14px 20px;
+  background: #c9f36a;
+  color: #17352d;
+  font: 900 14px inherit;
+  cursor: pointer;
+  box-shadow: 0 5px 0 #8db94b;
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s;
+}
+
+button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 7px 0 #8db94b;
+}
+
+button:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #8db94b;
+}
+
+#action {
+  width: 100%;
+  font-size: 14px;
+}
+
+.footnote {
+  font-size: 11px;
+  color: #80958a;
+  text-align: center;
+  margin-top: 15px;
+}
+
+#mobile-controls {
+  position: absolute;
+  bottom: 17px;
+  left: 18px;
+  right: 18px;
+  display: none;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.pad {
+  display: flex;
+  gap: 9px;
+}
+
+.pad button {
+  pointer-events: auto;
+  width: 55px;
+  height: 55px;
+  border-radius: 17px;
+  padding: 0;
+  font-size: 22px;
+  color: #fff;
+  background: #17352dbb;
+  border: 1px solid #ffffff66;
+  box-shadow: none;
+  touch-action: none;
+}
+
+.pad button:active {
+  background: #4e8d5d;
+}
+
+@media (max-width: 700px) {
+  #game-wrap {
+    height: 100vh;
+  }
+
+  .topbar {
+    left: 10px;
+    right: 10px;
+    top: 10px;
+  }
+
+  .brand,
+  .stats {
+    padding: 9px 10px;
+    border-radius: 12px;
+  }
+
+  .stats {
+    gap: 9px;
+    font-size: 11px;
+  }
+
+  .brand strong {
+    font-size: 10px;
+  }
+
+  .brand span {
+    font-size: 9px;
+  }
+
+  #mobile-controls {
+    display: flex;
+  }
+
+  .modal {
+    padding: 25px;
+  }
+}
