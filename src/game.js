@@ -1,19 +1,35 @@
-import { clamp } from "./engine/math.js";
+import { clamp, rand } from "./engine/math.js";
+import { sfx } from "./engine/audio.js";
+import { odsMessage } from "./ui/ods.js";
 import { createPlayer, resetPlayer, updatePlayer, drawPlayer } from "./entities/player.js";
 import { createSeed, touchesSeed, drawSeed } from "./entities/seed.js";
 import { createHazard, touchesHazard, drawHazard } from "./entities/hazard.js";
 import { createPlatform, drawPlatform } from "./entities/platform.js";
+import { createTrash, touchesTrash, drawTrash, TRASH_TYPES } from "./entities/trash.js";
 import { burst, updateParticles, drawParticles } from "./entities/particles.js";
 import {
-  generateDecor, drawBackground, drawDecor, drawGround, drawCheckpoint, drawFinish,
+  generateDecor, drawBackground, drawDecor, drawPlanted, drawGround, drawCheckpoint, drawFinish,
 } from "./render/scenery.js";
-import { updateHUD, drawProgress } from "./ui/hud.js";
+import { updateHUD, drawProgress, drawAirMeter, drawTrashCounts } from "./ui/hud.js";
 import { say, updateToast } from "./ui/toast.js";
-import { showOverlay, hideOverlay } from "./ui/overlay.js";
+import { showOverlay, hideOverlay, setIntro } from "./ui/overlay.js";
+import { hideAlert } from "./ui/alert.js";
+import { loadLevel, LEVELS } from "./levels/loader.js";
+import { initFlood, updateFlood, onFloodHit, drawFloodWorld, drawFloodOverlay, drawFloodHud } from "./flood.js";
 
 const START_LIVES = 3;
 const KNOCKBACK = 170;
 const INVULNERABLE_TIME = 1.5;
+const SHAKE_TIME = 0.25;
+
+// Qualidade do ar (0-100): piora perto da fumaça, melhora ao plantar e reciclar.
+const AIR_START = 60;
+const AIR_LOW = 25;
+const SMOG_RADIUS = 150;
+const SMOG_DRAIN = 14; // pontos por segundo, no centro da nuvem
+const TREE_AIR = 6;
+const TRASH_AIR = 2;
+const LOW_AIR_SPEED = 0.8;
 
 // Estado de uma partida e regras do jogo, a partir dos dados de uma fase.
 export function createGame(view, input, levelData) {
@@ -24,6 +40,11 @@ export function createGame(view, input, levelData) {
     camera: 0,
     platforms: [],
     seeds: [],
+    trash: [],
+    trashCount: {},
+    planted: [],
+    air: AIR_START,
+    airWarned: false,
     hazards: [],
     decor: [],
     particles: [],
@@ -34,6 +55,8 @@ export function createGame(view, input, levelData) {
     lives: START_LIVES,
     score: 0,
     finishHintCooldown: 0,
+    shake: 0,
+    deadTrees: 0,
   };
 
   // Largura visível em coordenadas do mundo (o canvas é escalado por view.scale).
@@ -44,8 +67,15 @@ export function createGame(view, input, levelData) {
     const L = g.level;
     g.platforms = L.platforms.map(createPlatform);
     g.seeds = L.seeds.map(createSeed);
+    g.trash = (L.trash ?? []).map(createTrash);
+    g.trashCount = Object.fromEntries(Object.keys(TRASH_TYPES).map((t) => [t, 0]));
+    g.planted = [];
+    g.air = AIR_START;
+    g.airWarned = false;
     g.hazards = L.hazards.map((h) => createHazard(h, L.ground));
     g.decor = generateDecor(L);
+    g.deadTrees = g.decor.filter((d) => d.type === "deadTree").length;
+    g.shake = 0;
     g.particles = [];
     g.checkpoints = (L.checkpoints ?? []).map((x) => ({ x, reached: false }));
     g.checkpoint = L.spawnX;
@@ -54,25 +84,48 @@ export function createGame(view, input, levelData) {
     g.lives = START_LIVES;
     g.score = 0;
     g.camera = 0;
+    initFlood(g, L);
+    setIntro(L.intro);
     resetPlayer(g.player, L.spawnX, L.ground);
     updateHUD(g);
   }
 
-  function start() {
-    if (g.state === "playing") return;
+  // Reinicia a fase atual (botão ↻), mesmo no meio da partida.
+  function restart() {
+    if (starting) return;
     build();
     g.state = "playing";
     hideOverlay();
-    say("Encontre as sementes e ajude a cidade!");
+    say(g.flood ? "Alerta de enchente! Limpe os bueiros e ache os moradores." : "Encontre as sementes e ajude a cidade!");
+  }
+
+  let starting = false;
+
+  // Depois de vencer, o botão leva à próxima fase (ou volta à primeira).
+  async function start() {
+    if (g.state === "playing" || starting) return;
+    starting = true;
+    try {
+      if (g.state === "won") g.level = await loadLevel(g.level.next ?? LEVELS[0]);
+      build();
+      g.state = "playing";
+      hideOverlay();
+      say(g.flood ? "Alerta de enchente! Limpe os bueiros e ache os moradores." : "Encontre as sementes e ajude a cidade!");
+    } finally {
+      starting = false;
+    }
   }
 
   function hit() {
     const p = g.player;
     if (p.inv > 0) return;
     g.lives--;
+    g.shake = SHAKE_TIME;
+    sfx.hit();
     updateHUD(g);
     if (g.lives <= 0) {
       g.state = "over";
+      hideAlert();
       showOverlay(
         ["FIM DE", "JOGO."],
         "A cidade ainda precisa da sua ajuda. Tente novamente e recolha as sementes para recuperar o parque.",
@@ -80,6 +133,7 @@ export function createGame(view, input, levelData) {
       );
       return;
     }
+    onFloodHit(g);
     p.x = Math.max(g.checkpoint, p.x - KNOCKBACK);
     p.y = g.level.ground - p.h;
     p.vy = 0;
@@ -87,12 +141,55 @@ export function createGame(view, input, levelData) {
     say("Cuidado! Você perdeu uma vida.");
   }
 
+  function changeAir(delta) {
+    g.air = clamp(g.air + delta, 0, 100);
+    if (g.air >= AIR_LOW) g.airWarned = false;
+  }
+
+  // A fumaça polui o ar enquanto o jogador está por perto.
+  function updateAir(dt) {
+    const p = g.player;
+    const cx = p.x + p.w / 2;
+    let drain = 0;
+    for (const h of g.hazards) {
+      if (h.type !== "smog") continue;
+      const d = Math.abs(h.x - cx);
+      if (d < SMOG_RADIUS) drain += SMOG_DRAIN * (1 - d / SMOG_RADIUS);
+    }
+    if (drain > 0) changeAir(-drain * dt);
+    if (g.air < AIR_LOW && !g.airWarned) {
+      g.airWarned = true;
+      say("😷 Ar muito poluído! Plante árvores para respirar melhor.");
+    }
+  }
+
   function finish() {
     g.state = "won";
+    sfx.win();
     showOverlay(
       ["CIDADE", "RENOVADA!"],
       "Você recuperou o parque e mostrou que pequenas atitudes ajudam a construir cidades mais sustentáveis. A ODS 11 começa com todos nós.",
-      "JOGAR NOVAMENTE",
+      g.level.next ? "PRÓXIMA FASE" : "JOGAR NOVAMENTE",
+    );
+  }
+
+  function floodWin(rescued, total) {
+    g.state = "won";
+    sfx.win();
+    showOverlay(
+      ["BAIRRO", "A SALVO!"],
+      `Você resgatou ${rescued} de ${total} moradores. Cidades resilientes precisam de alerta, drenagem limpa e solidariedade (ODS 11.5).`,
+      g.level.next ? "PRÓXIMA FASE" : "JOGAR NOVAMENTE",
+    );
+  }
+
+  function floodLose() {
+    g.state = "over";
+    sfx.hit();
+    showOverlay(
+      ["A ÁGUA", "VENCEU."],
+      "Moradores demais ficaram para trás. Limpe os bueiros para a água subir mais devagar e leve todos ao ponto alto a tempo.",
+      "TENTAR DE NOVO",
     );
   }
 
@@ -100,6 +197,9 @@ export function createGame(view, input, levelData) {
     if (g.state !== "playing") return;
     const p = g.player;
     const L = g.level;
+    // Ar ruim e água (waterMul, definido em flood.js) reduzem a velocidade juntos.
+    p.speedMul = (g.air < AIR_LOW ? LOW_AIR_SPEED : 1) * (p.waterMul ?? 1);
+    g.shake = Math.max(0, g.shake - dt);
     updatePlayer(p, dt, input, L);
 
     for (const s of g.seeds) {
@@ -109,11 +209,30 @@ export function createGame(view, input, levelData) {
       g.score += 100;
       updateHUD(g);
       burst(g.particles, s.x, s.y);
-      say(
-        g.collected === g.seedGoal
-          ? "🌳 Todas as sementes! Corra até a bandeira."
-          : "+100 pontos · Semente coletada!",
-      );
+      g.planted.push({ x: s.x, age: 0 });
+      changeAir(TREE_AIR);
+      sfx.seed();
+      say(odsMessage(g.collected, g.seedGoal), 3.6);
+    }
+
+    for (const t of g.trash) {
+      if (!touchesTrash(t, p)) continue;
+      t.got = true;
+      g.trashCount[t.type]++;
+      g.score += 50;
+      updateHUD(g);
+      changeAir(TRASH_AIR);
+      burst(g.particles, t.x, t.y, TRASH_TYPES[t.type].color, 7);
+      sfx.seed();
+      say(`♻ ${TRASH_TYPES[t.type].label} na lixeira certa! +50`);
+    }
+
+    updateAir(dt);
+    for (const tr of g.planted) tr.age += dt;
+
+    if (g.flood) {
+      updateFlood(g, dt, { hit, win: floodWin, lose: floodLose });
+      if (g.state !== "playing") return;
     }
 
     if (p.inv <= 0 && g.hazards.some((h) => touchesHazard(h, p))) hit();
@@ -130,7 +249,7 @@ export function createGame(view, input, levelData) {
     g.particles = updateParticles(g.particles, dt);
 
     g.finishHintCooldown = Math.max(0, g.finishHintCooldown - dt);
-    if (p.x > L.width - 100) {
+    if (!g.flood && p.x > L.width - 100) {
       if (g.collected >= g.seedGoal) finish();
       else if (g.finishHintCooldown === 0) {
         const left = g.seedGoal - g.collected;
@@ -148,21 +267,52 @@ export function createGame(view, input, levelData) {
     ctx.clearRect(0, 0, view.W, view.H);
     ctx.save();
     ctx.scale(view.scale, view.scale);
-    const scene = { camera: g.camera, viewW: viewW(), viewH: viewH(), level: g.level, decor: g.decor };
+    if (g.shake > 0) {
+      const mag = g.shake * 22;
+      ctx.translate(rand(-mag, mag), rand(-mag, mag));
+    }
+    const progress = g.seedGoal ? clamp(g.collected / g.seedGoal, 0, 1) : 0;
+    const scene = {
+      camera: g.camera,
+      viewW: viewW(),
+      viewH: viewH(),
+      level: g.level,
+      decor: g.decor,
+      progress,
+      restoredTrees: Math.floor(g.deadTrees * progress),
+      goalMet: g.collected >= g.seedGoal,
+    };
     drawBackground(ctx, scene);
     drawDecor(ctx, scene);
     drawGround(ctx, scene);
     for (const pl of g.platforms) drawPlatform(ctx, pl, g.camera, scene.viewW);
     for (const cp of g.checkpoints) drawCheckpoint(ctx, cp.x, cp.reached, scene);
     for (const h of g.hazards) drawHazard(ctx, h, g.camera, scene.viewW);
+    drawPlanted(ctx, g.planted, scene);
+    for (const t of g.trash) drawTrash(ctx, t, g.camera, scene.viewW);
+    drawFloodWorld(ctx, g, scene);
     for (const s of g.seeds) drawSeed(ctx, s, g.camera, scene.viewW);
     drawParticles(ctx, g.particles, g.camera);
-    drawFinish(ctx, scene);
+    if (!g.flood) drawFinish(ctx, scene);
     drawPlayer(ctx, g.player, g.camera);
-    drawProgress(ctx, scene.viewW, g.collected, g.seedGoal);
+    if (!g.flood) {
+      // Névoa de poluição: aparece quando o ar fica abaixo de 55%.
+      const haze = Math.max(0, (55 - g.air) / 55) * 0.4;
+      if (haze > 0) {
+        ctx.fillStyle = `rgba(112, 98, 66, ${haze})`;
+        ctx.fillRect(0, 0, scene.viewW, scene.viewH);
+      }
+    }
+    drawFloodOverlay(ctx, g, scene);
+    if (g.flood) drawFloodHud(ctx, scene.viewW, g);
+    else {
+      drawProgress(ctx, scene.viewW, g.collected, g.seedGoal);
+      drawAirMeter(ctx, scene.viewW, g.air);
+      drawTrashCounts(ctx, scene.viewW, g.trashCount);
+    }
     ctx.restore();
   }
 
   build();
-  return { start, update, render, state: g };
+  return { start, restart, update, render, state: g };
 }

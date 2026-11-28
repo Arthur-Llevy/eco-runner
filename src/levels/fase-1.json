@@ -1,6 +1,7 @@
 {
   "id": "fase-1",
   "name": "Centro cinzento",
+  "next": "fase-2",
   "width": 3300,
   "ground": 585,
   "spawnX": 90,
@@ -34,19 +35,33 @@
     [1370, 448], [1615, 382], [1875, 433], [2135, 362], [2395, 433],
     [2670, 377], [2950, 443], [3150, 530]
   ],
+  "trash": [
+    { "x": 150, "y": 559, "type": "glass" },
+    { "x": 470, "y": 466, "type": "paper" },
+    { "x": 690, "y": 399, "type": "plastic" },
+    { "x": 920, "y": 454, "type": "metal" },
+    { "x": 1170, "y": 389, "type": "glass" },
+    { "x": 1440, "y": 464, "type": "paper" },
+    { "x": 1690, "y": 399, "type": "plastic" },
+    { "x": 1950, "y": 449, "type": "metal" },
+    { "x": 2200, "y": 379, "type": "glass" },
+    { "x": 2480, "y": 449, "type": "paper" },
+    { "x": 2740, "y": 394, "type": "plastic" },
+    { "x": 3000, "y": 459, "type": "metal" }
+  ],
   "hazards": [
-    { "x": 305, "type": "smog" },
+    { "x": 305, "y": 547, "type": "smog" },
     { "x": 535, "type": "vent", "phase": 0 },
-    { "x": 725, "type": "bin" },
-    { "x": 965, "type": "smog" },
+    { "x": 725, "y": 567, "type": "bin" },
+    { "x": 965, "y": 543, "type": "smog" },
     { "x": 1185, "type": "vent", "phase": 1.4 },
-    { "x": 1445, "type": "bin" },
-    { "x": 1695, "type": "smog" },
+    { "x": 1445, "y": 567, "type": "bin" },
+    { "x": 1695, "y": 545, "type": "smog" },
     { "x": 1965, "type": "vent", "phase": 0.6 },
-    { "x": 2220, "type": "bin" },
-    { "x": 2485, "type": "smog" },
+    { "x": 2220, "y": 567, "type": "bin" },
+    { "x": 2485, "y": 543, "type": "smog" },
     { "x": 2765, "type": "vent", "phase": 2.2 },
-    { "x": 3055, "type": "smog" }
+    { "x": 3055, "y": 547, "type": "smog" }
   ],
   "checkpoints": [1055, 2075]
 }

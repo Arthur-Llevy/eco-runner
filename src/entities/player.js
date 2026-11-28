@@ -1,4 +1,5 @@
 import { clamp } from "../engine/math.js";
+import { sfx } from "../engine/audio.js";
 import { rect, circle } from "../render/draw.js";
 
 const SPEED = 245;
@@ -15,12 +16,15 @@ export function resetPlayer(p, x, ground) {
   p.vx = 0;
   p.vy = 0;
   p.inv = 0;
+  p.speedMul = 1;
+  p.waterMul = 1;
 }
 
 // Movimento horizontal, gravidade, plataformas de "mão única" e pulo.
 export function updatePlayer(p, dt, input, level) {
   const prevBottom = p.y + p.h;
-  p.vx = (input.right ? SPEED : 0) - (input.left ? SPEED : 0);
+  const speed = SPEED * (p.speedMul ?? 1);
+  p.vx = (input.right ? speed : 0) - (input.left ? speed : 0);
   if (p.vx !== 0) p.face = Math.sign(p.vx);
   p.x = clamp(p.x + p.vx * dt, 0, level.width - p.w);
 
@@ -47,6 +51,7 @@ export function updatePlayer(p, dt, input, level) {
   if (input.consumeJump() && p.onGround) {
     p.vy = JUMP_VELOCITY;
     p.onGround = false;
+    sfx.jump();
   }
 
   if (Math.abs(p.vx) > 0 && p.onGround) p.walk += dt * 13;

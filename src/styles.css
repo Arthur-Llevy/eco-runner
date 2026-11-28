@@ -95,8 +95,87 @@ canvas {
   white-space: nowrap;
 }
 
+.stats {
+  align-items: center;
+  pointer-events: auto;
+}
+
+.hud-btn {
+  border: 1px solid #c9d6b8;
+  background: #e6edda;
+  color: #17352d;
+  border-radius: 10px;
+  padding: 5px 9px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.hud-btn:hover {
+  background: #d7e5c3;
+  transform: none;
+  box-shadow: none;
+}
+
+.hud-btn:active {
+  transform: scale(0.95);
+  box-shadow: none;
+}
+
 .stat b {
   font-variant-numeric: tabular-nums;
+}
+
+.stat[hidden] {
+  display: none;
+}
+
+#alert {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  max-width: min(440px, 44vw);
+  padding: 9px 18px;
+  border-radius: 14px;
+  color: white;
+  text-align: center;
+  box-shadow: 0 8px 22px #17352d30;
+  pointer-events: none;
+}
+
+#alert.show {
+  display: flex;
+}
+
+#alert b {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+#alert span {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#alert.warn {
+  background: #d98a1fed;
+  animation: pulse 0.9s ease-in-out infinite alternate;
+}
+
+#alert.danger {
+  background: #c24238ed;
+}
+
+@keyframes pulse {
+  to {
+    background: #e5532aed;
+  }
 }
 
 #toast {
@@ -105,7 +184,8 @@ canvas {
   left: 50%;
   transform: translate(-50%, -8px);
   opacity: 0;
-  padding: 10px 17px;
+  max-width: min(560px, 90vw);
+  padding: 10px 18px;
   border-radius: 999px;
   background: #17352ded;
   color: white;
@@ -280,6 +360,15 @@ button:active {
 
   .brand span {
     font-size: 9px;
+  }
+
+  #alert {
+    top: 70px;
+    max-width: 86vw;
+  }
+
+  #toast {
+    top: 138px;
   }
 
   #mobile-controls {
